@@ -1,4 +1,4 @@
-import json
+import yaml
 
 from openai import OpenAI
 import os
@@ -41,5 +41,5 @@ for model in models:
     except Exception as e:
         print("failed")
 
-with open("models.json", "w", encoding="utf-8") as f:
-    json.dump(models_ok, f, indent=2)
+with open("models.yaml", "w", encoding="utf-8") as f:
+    yaml.dump(models_ok, f)

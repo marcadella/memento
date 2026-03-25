@@ -1,0 +1,7 @@
+- "Llama-3.3-70B-Instruct" # Struggles to understand who is who
+- "mistral-small-2503" # Cannot work with name field
+- "Mistral-Large-3" # Cannot work with name field
+- "Phi-4-mini-reasoning" # Crashes
+- "Llama-4-Maverick-17B-128E-Instruct-FP8" # Struggles to understand who is who
+- "DeepSeek-V3.2" # Seems smart, but super slow!
+- "gpt-4.1-mini" # Seems smarter than the others

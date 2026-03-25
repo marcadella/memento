@@ -42,7 +42,7 @@ class HumanAgent(AgentLike):
 
     def hear(self, speaker_name: str, message: str):
         if speaker_name != self.name:
-            print(f"'{speaker_name}' says: {message}")
+            print(f"{speaker_name}: {message}")
 
 class TestAgent(AgentLike):
     """

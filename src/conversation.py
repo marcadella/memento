@@ -1,5 +1,5 @@
-import json
 import os
+import yaml
 from abc import ABC, abstractmethod
 from agent import AgentLike, HumanAgent
 from datetime import datetime
@@ -28,7 +28,7 @@ class ConversationLike(ABC):
             for agent in self.agents.values():
                 agent.hear(speaker_name, message)
 
-    def start(self, enact=False, quiet=True):
+    def start(self, enact=False, quiet=False):
         """
         Start a conversation.
         :param enact: Used only when resume mode is used. If False, agents past answers are replayed as is. If True, agents are speaking by themselves in the re-played conversation.
@@ -54,12 +54,12 @@ class ConversationLike(ABC):
         :param enact: If False, agents past answers are replayed as is. If True, agents are speaking by themselves in the re-played conversation.
         :param quiet: If False, history/re-enactment is printed.
         """
-        conv_path = f"{self.output_dir}/{self.conversation_name}.json"
+        conv_path = f"{self.output_dir}/{self.conversation_name}.yaml"
         if os.path.exists(conv_path):
             verb = "Reenacting" if enact else "Reloading"
             print(f"{verb} conversation {self.conversation_name}...")
-            with open(f"{self.output_dir}/{self.conversation_name}.json", "r", encoding="utf-8") as f:
-                original_tape = json.load(f)
+            with open(conv_path, "r", encoding="utf-8") as f:
+                original_tape = yaml.safe_load(f)
         else:
             print(f"New conversation {self.conversation_name}")
             original_tape = []
@@ -83,8 +83,8 @@ class ConversationLike(ABC):
         if self.output_dir:
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
-            with open(f"{self.output_dir}/{self.conversation_name}.json", "w", encoding="utf-8") as f:
-                json.dump(self.tape, f, indent=2)
+            with open(f"{self.output_dir}/{self.conversation_name}.yaml", "w", encoding="utf-8") as f:
+                yaml.dump(self.tape, f)
 
     @abstractmethod
     def introduction(self):

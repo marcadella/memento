@@ -26,7 +26,7 @@ class ProcessLike(ABC):
         :param context: A list of messages
         :return: LLM response message
         """
-        print(self.messages(context))
+        #print(self.messages(context))
 
         chat = self.client.chat.completions.create(
             model=self.model,
