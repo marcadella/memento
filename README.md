@@ -16,6 +16,12 @@ such as:
 - **teaching**
 and more.
 
+### Concepts
+
+- An **agent** is an entity simulating one person having the ability to think, memorized, and react to a conversation using **processes**.
+- A **process** is an LLM based skill.
+- A **conversation** is a place where multiple agents talks to each other. Everyone in a conversation hears what everyone else is saying.
+
 ### Recommended reading
 
 - [Blog post on text-based memory](https://dev.to/imaginex/ai-agent-memory-management-when-markdown-files-are-all-you-need-5ekk)
@@ -24,11 +30,18 @@ and more.
 
 ## Getting started
 
+### Initial setup
+
 - Create the environment: `conda env create -f environment.yml`
-- Add the needed environment variables to your system:
+- Activate the environment: `conda activate memento`
+- Install the package in editable mode.`pip install -e .`. This command needs to be run only once (or each time `pyproject.toml` is modified).
+- If you want to use an openAI server, add the needed environment variables to your system (and restart your terminal):
   - `CHATUIT_BASE_URL`
   - `CHATUIT_API_KEY`
-- Restart your terminal
 - Alternatively, start LM studio server and load whatever model. The expected URL is `http://127.0.0.1:1234/v1`.
 
-To do each time: `conda activate memento`
+### Next step
+
+- To do each time: `conda activate memento`
+- Run `python example.py`, which is an example of running a conversation between a human and 2 AI agents.
+
