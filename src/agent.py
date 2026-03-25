@@ -12,17 +12,26 @@ class AgentLike(ABC):
         self.processes: dict = {} # Implementations should fill this with ProcessLike
 
     @abstractmethod
-    def speak(self):
+    def speak(self) -> str:
+        """
+        Produce a message to be delivered to listeners
+        :return: Message
+        """
         pass
 
     @abstractmethod
-    def hear(self, speaker_name: str, monologue: str):
+    def hear(self, speaker_name: str, message: str):
+        """
+        Process a message delivered by some speaker.
+        :param speaker_name: Name of the speaker
+        :param message: Received message
+        """
         pass
 
 
 class HumanAgent(AgentLike):
     """
-    A special kind of agent allowing user to be part of, and interact with, an agent team.
+    A special kind of agent allowing human interaction.
     """
 
     def __init__(self, name: str):
@@ -31,9 +40,9 @@ class HumanAgent(AgentLike):
     def speak(self):
         return input(f"{self.name}: ")
 
-    def hear(self, speaker_name: str, monologue: str):
+    def hear(self, speaker_name: str, message: str):
         if speaker_name != self.name:
-            print(f"'{speaker_name}' says: {monologue}")
+            print(f"'{speaker_name}' says: {message}")
 
 class TestAgent(AgentLike):
     """
@@ -52,12 +61,13 @@ class TestAgent(AgentLike):
     def __init__(self, name: str, client, model):
         super().__init__(name)
         self.processes = {"reaction": self.ReactProcess("reaction", client, model, name)}
-        self.history = []
+        self.history = [] #Infinite memory
 
     def speak(self):
         return self.processes["reaction"].apply(self.history)
 
-    def hear(self, speaker_name: str, monologue: str):
+    def hear(self, speaker_name: str, message: str):
         role = "assistant" if speaker_name == self.name else "user"
-        name = None if speaker_name == self.name else speaker_name
-        self.history.append({"role": role, "content": monologue, "name": name})
+        #name = None if speaker_name == self.name else speaker_name
+        name = speaker_name
+        self.history.append({"role": role, "content": message, "name": name})

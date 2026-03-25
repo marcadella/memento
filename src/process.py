@@ -4,7 +4,7 @@ import json
 
 class ProcessLike(ABC):
     """
-    A process uses stateless LLM for carrying out some kind of computations
+    A process uses a stateless LLM for carrying out some kind of computation.
     """
     def __init__(self, process_name, client, model):
         self.process_name = process_name
@@ -13,12 +13,20 @@ class ProcessLike(ABC):
         self.functions = [] # Implementations should fill with implemented functions
 
     @abstractmethod
-    def messages(self, context):
-        """Given a context, produces a sequence of messages."""
+    def messages(self, context: list):
+        """
+        Given a context, produces a sequence of messages to be used as context by the LLM.
+        For instance, this method may append a system prompt to the provided context.
+        """
         pass
 
-    def apply(self, context):
-        #print(self.messages(context))
+    def apply(self, context: list):
+        """
+        Given a context, computes an output using an LLM
+        :param context: A list of messages
+        :return: LLM response message
+        """
+        print(self.messages(context))
 
         chat = self.client.chat.completions.create(
             model=self.model,

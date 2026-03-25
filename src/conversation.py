@@ -49,6 +49,11 @@ class ConversationLike(ABC):
         self.write_to_file()
 
     def reload(self, enact, quiet):
+        """
+        Reload a conversation.
+        :param enact: If False, agents past answers are replayed as is. If True, agents are speaking by themselves in the re-played conversation.
+        :param quiet: If False, history/re-enactment is printed.
+        """
         conv_path = f"{self.output_dir}/{self.conversation_name}.json"
         if os.path.exists(conv_path):
             verb = "Reenacting" if enact else "Reloading"
@@ -72,6 +77,9 @@ class ConversationLike(ABC):
                         agent.hear(speaker_name, message)
 
     def write_to_file(self):
+        """
+        Write the conversation into file.
+        """
         if self.output_dir:
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
@@ -80,13 +88,24 @@ class ConversationLike(ABC):
 
     @abstractmethod
     def introduction(self):
+        """
+        A string to instruct the user how to use this conversation.
+        :return: String
+        """
         pass
 
     @abstractmethod
     def turn(self):
+        """
+        Conversation turn
+        :return: True if the conversation continues, False if it should stop.
+        """
         pass
 
 class InteractiveConversation(ConversationLike):
+    """
+    An interactive conversation where each turn, the first human registered controls who speak (or speak himself).
+    """
     def __init__(self, agents: list[AgentLike], output_dir="output", conversation_name=None):
         super().__init__(agents, output_dir, conversation_name)
         self.human_agent = [agent for agent in agents if type(agent) == HumanAgent][0]
