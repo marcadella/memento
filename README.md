@@ -20,7 +20,7 @@ and more.
 
 - An **agent** is an entity simulating one person having the ability to think, memorized, and react to a conversation using **processes**.
 - A **process** is an LLM based skill.
-- A **conversation** is a place where multiple agents talks to each other. Everyone in a conversation hears what everyone else is saying.
+- A **conversation** is a place where multiple agents talk to each other. Everyone in a conversation hear what everyone else is saying.
 
 ### Recommended reading
 
@@ -42,6 +42,6 @@ and more.
 
 ### Next step
 
-- To do each time: `conda activate memento`
+- Don't forget: `conda activate memento`
 - Run `python example.py`, which is an example of running a conversation between a human and 2 AI agents.
 
