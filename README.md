@@ -27,6 +27,7 @@ and more.
 
 - [Blog post on text-based memory](https://dev.to/imaginex/ai-agent-memory-management-when-markdown-files-are-all-you-need-5ekk)
 - [Example of implementation of agent loop with opanai function API](https://www.aimletc.com/creating-an-ai-agent-with-self-managing-memory/)
+- https://colab.research.google.com/github/uitml/GenerativeAI_course/blob/main/tasks/lab_llm_reasoning_analysis.ipynb
 
 
 ## Getting started
