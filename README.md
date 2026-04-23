@@ -1,34 +1,30 @@
 # memento
 
-LLM agents with text-based memory
+An exploration of agentic memory strategies
 
 ## What is this project about
 
 AI agents managing their own memory is a crucial architectural shift that transforms stateless LLMs into stateful, 
 autonomous agents capable of learning, recalling events, and maintaining continuity across long-term tasks. 
-By giving agents read/write access to a dedicated memory storage (in our case Markdown files), 
+By giving agents read/write access to a dedicated memory storage, 
 they can decide when to store, update, or retrieve information, mimicking a human's ability to take notes and learn from experience.
 
-In this work, we experiment with markdown-based memory, and we observe how agents with memory can cooperate and accomplish complex tasks mobilizing concepts
-such as:
-- **self** / **other**
-- **trust**
-- **teaching**
+In this work, we experiment with three types of agentic memory strategies such as:
+- RAG-based,
+- graph-based,
+- self-editing bounded text-based.
 
-and more.
+We also embed these three types of memory into an agent as sub-conscious processes, and assess how this agent performs compared to a commercial LLM when asked to solve a complex task.
 
 ### Concepts
 
-- An **agent** is an entity simulating one person having the ability to think, memorized, and react to a conversation using **processes**.
-- A **process** is an LLM based skill.
-- A **conversation** is a place where multiple agents talk to each other. Everyone in a conversation hears what everyone else is saying.
+- An **agent** is an entity having the ability to think, memorize, and react to a conversation.
+- A **subconsious process** is a process running inside of an agent in charge of performing internal tasks such as memory access/update.
+- A **conversation** is a place where multiple agents talk with each other. Everyone in a conversation hears what everyone else is saying.
 
 ### Recommended reading
 
-- [Blog post on text-based memory](https://dev.to/imaginex/ai-agent-memory-management-when-markdown-files-are-all-you-need-5ekk)
-- [Example of implementation of agent loop with opanai function API](https://www.aimletc.com/creating-an-ai-agent-with-self-managing-memory/)
-- https://colab.research.google.com/github/uitml/GenerativeAI_course/blob/main/tasks/lab_llm_reasoning_analysis.ipynb
-
+Very useful resources to get started [here](https://github.com/marcadella/memento/wiki/Literature#must-read).
 
 ## Getting started
 
