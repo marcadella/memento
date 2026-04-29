@@ -1,7 +1,9 @@
 import os
 import yaml
 from abc import ABC, abstractmethod
-from agent import AgentLike, HumanAgent
+
+from agents.HumanAgent import HumanAgent
+from generics.agent import AgentLike
 from datetime import datetime
 
 

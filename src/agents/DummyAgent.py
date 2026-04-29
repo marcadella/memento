@@ -1,53 +1,11 @@
-from abc import ABC, abstractmethod
+from generics.agent import AgentLike
+from generics.process import ProcessLike
+from memories.KeyValueMemory import KeyValueMemory
 
-from memory import KeyValueMemory
-from process import ProcessLike
 
-
-class AgentLike(ABC):
+class DummyAgent(AgentLike):
     """
-    An agent is an entity encompassing a set of processes
-    """
-    def __init__(self, name: str):
-        self.name = name
-        self.processes: dict = {} # Implementations should fill this with ProcessLike
-
-    @abstractmethod
-    def speak(self) -> str:
-        """
-        Produce a message to be delivered to listeners
-        :return: Message
-        """
-        pass
-
-    @abstractmethod
-    def hear(self, speaker_name: str, message: str):
-        """
-        Process a message delivered by some speaker.
-        :param speaker_name: Name of the speaker
-        :param message: Received message
-        """
-        pass
-
-
-class HumanAgent(AgentLike):
-    """
-    A special kind of agent allowing human interaction.
-    """
-
-    def __init__(self, name: str):
-        super().__init__(name)
-
-    def speak(self):
-        return input(f"{self.name}: ")
-
-    def hear(self, speaker_name: str, message: str):
-        if speaker_name != self.name:
-            print(f"{speaker_name}: {message}")
-
-class TestAgent(AgentLike):
-    """
-    A simple agent with an infinite context memory
+    A simple agent with an infinite context memory and an ability to store important information in a dictionary (this memory is not used for anything though).
     """
 
     class ReactProcess(ProcessLike):

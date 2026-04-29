@@ -1,12 +1,5 @@
-from process import ProcessLike
+from generics.memory import MemoryLike
 
-
-class MemoryLike(ProcessLike):
-    """
-    A memory is a file (virtual or not) which an agent process can interact with using functions.
-    """
-    def __init__(self, name, client, model):
-        super().__init__(name, client, model)
 
 class KeyValueMemory(MemoryLike):
     def __init__(self, name, client, model):

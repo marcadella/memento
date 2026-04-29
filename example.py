@@ -2,6 +2,8 @@
 
 import argparse
 
+from agents.HumanAgent import HumanAgent
+
 parser = argparse.ArgumentParser(description="Example conversation.")
 
 # Add arguments
@@ -15,7 +17,7 @@ from openai import OpenAI
 import os
 import yaml
 
-from agent import TestAgent, HumanAgent
+from agents.DummyAgent import DummyAgent
 from conversation import InteractiveConversation
 
 ######### Boilerplate
@@ -44,7 +46,7 @@ assert model in models
 # - 1 human directing the conversation
 # - 2 AI agents
 h1 = HumanAgent("H")
-a1 = TestAgent("A", client, model)
+a1 = DummyAgent("A", client, model)
 #a2 = TestAgent("B", client, model)
 
 # We create a conversation instance
