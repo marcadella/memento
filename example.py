@@ -43,12 +43,14 @@ assert model in models
 # We create 3 agents:
 # - 1 human directing the conversation
 # - 2 AI agents
-h1 = HumanAgent("Albert")
+h1 = HumanAgent("H")
 a1 = TestAgent("A", client, model)
-a2 = TestAgent("B", client, model)
+#a2 = TestAgent("B", client, model)
 
 # We create a conversation instance
-conv = InteractiveConversation([a1, a2, h1], conversation_name=args.name)
+conv = InteractiveConversation([a1,
+                                #a2,
+                                h1], conversation_name=args.name)
 # and we start it.
 # If the conversation existed already in output/<name>.yaml, it is replayed.
 # Otherwise, a new conversation is started

@@ -19,7 +19,7 @@ We also embed these three types of memory into an agent as sub-conscious process
 ### Concepts
 
 - An **agent** is an entity having the ability to think, memorize, and react to a conversation.
-- A **subconsious process** is a process running inside of an agent in charge of performing internal tasks such as memory access/update.
+- A **subconsious process** is a process running within an agent in charge of performing internal tasks such as memory access/update.
 - A **conversation** is a place where multiple agents talk with each other. Everyone in a conversation hears what everyone else is saying.
 
 ### Recommended reading

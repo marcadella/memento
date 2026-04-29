@@ -43,7 +43,7 @@ class KeyValueMemory(MemoryLike):
         :return:
         """
         self.kv_store[key] = value
-        print(f"\n***** Memory content *****{self.kv_store}\n**********")
+        print(f"***** Memorizing({key}: {value})\n")
 
     def read_all(self):
         """
@@ -52,3 +52,9 @@ class KeyValueMemory(MemoryLike):
         """
         memorized_items = [f"- {k}: {v}" for k, v in self.kv_store.items()]
         return "\n".join(memorized_items)
+
+    def messages(self, context):
+        return [{"role": "system",
+                 "content": f"The following message contains potentially useful information which you may decide to store in a key value store using 'store_key_value_pair' tool." 
+                            f"If more than on piece of information is important, store them using as many call to this tool as necessary."
+                            f"If no information is important however, do not call the tool and do not answer anything. Message: '{context}'"}]

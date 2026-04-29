@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from memory import KeyValueMemory
 from process import ProcessLike
 
 
@@ -60,14 +61,25 @@ class TestAgent(AgentLike):
 
     def __init__(self, name: str, client, model):
         super().__init__(name)
-        self.processes = {"reaction": self.ReactProcess("reaction", client, model, name)}
+        self.processes = {
+            "react": self.ReactProcess("react", client, model, name),
+            "memorize": KeyValueMemory("memorize", client, model),
+        }
         self.history = [] #Infinite memory
 
     def speak(self):
-        return self.processes["reaction"].apply(self.history)
+        """
+        In this implementation, we react to the unbounded memory.
+        Note that the keyValueMemory could be used here.
+        """
+        return self.processes["react"].apply(self.history)
 
     def hear(self, speaker_name: str, message: str):
+        """In this implementation, each new message is analysed by the KeyValueMemory process:
+          - if something is worth storing in the memory, the LLM makes a call to a storage function (one or more times)
+          - if nothing is interesting, the LLM do nothing.
+          Then we append the message to the unbounded history.
+        """
         role = "assistant" if speaker_name == self.name else "user"
-        #name = None if speaker_name == self.name else speaker_name
-        name = speaker_name
-        self.history.append({"role": role, "content": message, "name": name})
+        self.processes["memorize"].apply(message)
+        self.history.append({"role": role, "content": message, "name": speaker_name})
