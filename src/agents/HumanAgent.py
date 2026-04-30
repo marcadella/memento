@@ -7,7 +7,7 @@ class HumanAgent(AgentLike):
     """
 
     def __init__(self, name: str):
-        super().__init__(name)
+        super().__init__(name, verbose=False)
 
     def speak(self):
         return input(f"{self.name}: ")

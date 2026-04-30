@@ -12,12 +12,17 @@ class ConversationLike(ABC):
     A place where some agents can talk together.
     If an existing conversation_name is provided, the conversation is resumed.
     """
-    def __init__(self, agents: list[AgentLike], output_dir, conversation_name):
+    def __init__(self, agents: list[AgentLike], output_dir, conversation_name, override):
         self.agents = {agent.name: agent for agent in agents}
         self.tape = []
         self.output_dir = output_dir # Set to None for no recording
         conversation_name = max(os.listdir(self.output_dir)) if conversation_name == "latest" else conversation_name
         self.conversation_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") if conversation_name is None else conversation_name
+        self.conv_path = f"{self.output_dir}/{self.conversation_name}.yaml"
+        if override:
+            if os.path.exists(self.conv_path):
+                os.remove(self.conv_path)
+
 
     def speak(self, speaker_name: str):
         """
@@ -56,11 +61,10 @@ class ConversationLike(ABC):
         :param enact: If False, agents past answers are replayed as is. If True, agents are speaking by themselves in the re-played conversation.
         :param quiet: If False, history/re-enactment is printed.
         """
-        conv_path = f"{self.output_dir}/{self.conversation_name}.yaml"
-        if os.path.exists(conv_path):
+        if os.path.exists(self.conv_path):
             verb = "Reenacting" if enact else "Reloading"
             print(f"{verb} conversation {self.conversation_name}...")
-            with open(conv_path, "r", encoding="utf-8") as f:
+            with open(self.conv_path, "r", encoding="utf-8") as f:
                 original_tape = yaml.safe_load(f)
         else:
             print(f"New conversation {self.conversation_name}")
@@ -85,7 +89,7 @@ class ConversationLike(ABC):
         if self.output_dir:
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
-            with open(f"{self.output_dir}/{self.conversation_name}.yaml", "w", encoding="utf-8") as f:
+            with open(self.conv_path, "w", encoding="utf-8") as f:
                 yaml.dump(self.tape, f)
 
     @abstractmethod
@@ -108,8 +112,8 @@ class InteractiveConversation(ConversationLike):
     """
     An interactive conversation where each turn, the first human registered controls who speak (or speak himself).
     """
-    def __init__(self, agents: list[AgentLike], output_dir="output", conversation_name=None):
-        super().__init__(agents, output_dir, conversation_name)
+    def __init__(self, agents: list[AgentLike], output_dir="output", conversation_name=None, override=False):
+        super().__init__(agents, output_dir, conversation_name, override)
         self.human_agent = [agent for agent in agents if type(agent) == HumanAgent][0]
 
     def introduction(self):
@@ -121,11 +125,38 @@ class InteractiveConversation(ConversationLike):
             return False
         if human_input in self.agents.keys():
             # If used entered the name of an agent, the latter is invited to speak
-            self.speak(human_input)
+            agent_name = human_input
+            self.speak(agent_name)
         else:
             self.tape += [{self.human_agent.name: human_input}]
             for agent in self.agents.values():
                 agent.hear(self.human_agent.name, human_input)
+
+        return True
+
+class SingleAgentConversation(ConversationLike):
+    """
+    A typical turn by turn conversation between a human (named "H") and an agent.
+    """
+    def __init__(self, agent: AgentLike, output_dir="output", conversation_name=None, override=False):
+        self.agent = agent
+        self.human_agent = HumanAgent("H")
+        super().__init__([self.agent, self.human_agent], output_dir, conversation_name, override)
+
+    def introduction(self):
+        return f"\nEnter empty input to terminate the conversation."
+
+    def turn(self):
+        human_input = self.human_agent.speak()
+
+        if not human_input:
+            return False
+
+        self.tape += [{self.human_agent.name: human_input}]
+        for agent in self.agents.values():
+            agent.hear(self.human_agent.name, human_input)
+
+        self.speak(self.agent.name)
 
         return True
 

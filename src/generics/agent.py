@@ -5,8 +5,9 @@ class AgentLike(ABC):
     """
     An agent is an entity encompassing a set of processes
     """
-    def __init__(self, name: str):
+    def __init__(self, name: str, verbose: bool):
         self.name = name
+        self.verbose = verbose
         self.processes: dict = {} # Implementations should fill this with ProcessLike
 
     @abstractmethod

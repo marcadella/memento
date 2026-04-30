@@ -1,6 +1,6 @@
 from generics.agent import AgentLike
-from generics.process import ProcessLike
 from memories.KeyValueMemory import KeyValueMemory
+from processes.ReactInConversationProcess import ReactInConversationProcess
 
 
 class DummyAgent(AgentLike):
@@ -8,19 +8,10 @@ class DummyAgent(AgentLike):
     A simple agent with an infinite context memory and an ability to store important information in a dictionary (this memory is not used for anything though).
     """
 
-    class ReactProcess(ProcessLike):
-        def __init__(self, process_name, client, model, agent_name):
-            super().__init__(process_name, client, model)
-            self.agent_name = agent_name
-
-        def messages(self, context):
-            return [{"role": "system", "content": f"Your name is '{self.agent_name}' and you are part of a conversation with multiple users. "
-                                                  f"You may answer with an empty string if you have nothing important to say and want to pass your turn to speak. "}] + context
-
     def __init__(self, name: str, client, model):
-        super().__init__(name)
+        super().__init__(name, verbose=True)
         self.processes = {
-            "react": self.ReactProcess("react", client, model, name),
+            "react": ReactInConversationProcess("react", client, model, name),
             "memorize": KeyValueMemory("memorize", client, model),
         }
         self.history = [] #Infinite memory
