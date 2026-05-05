@@ -6,4 +6,7 @@ dependencies:
   - python=3.12
   - openai
   - pyyaml
+  - pip
+  - pip:
+      - neo4j
 

@@ -38,6 +38,40 @@ Very useful resources to get started [here](https://github.com/marcadella/mement
   - `CHATUIT_API_KEY`
 - Alternatively, start LM studio server and load whatever model. The expected URL is `http://127.0.0.1:1234/v1`.
 
+
+
+#### NEO4j set-up
+
+The graph memory backend uses a local Neo4j database. Each contributor runs
+their own instance.
+
+- **Install Neo4j Desktop** from [Webpage](https://neo4j.com/download/).
+- **Create a local instance** named `memento` (any name works, but the rest of these instructions assume `memento`).
+  - The default username is `neo4j`.
+  - Note the password you set.
+
+- **Start the instance** in Neo4j Desktop and confirm it shows as RUNNING.
+- **Set the connection environment variables** in your shell config (e.g. `~/.zshrc` or `~/.bashrc`):
+
+  ```bash
+    export NEO4J_URI="neo4j://127.0.0.1:7687"
+    export NEO4J_USER="neo4j"
+    export NEO4J_PASSWORD="your-password"
+  ```
+
+   Then reload the shell: `source ~/.zshrc`.
+
+- **Initialize the schema:**
+
+```bash
+   python scripts/init_neo4j.py
+```
+
+   The script is idempotent and prints a summary of the constraints and
+   indexes that were applied. It is safe to re-run after pulling schema
+   changes.
+
+
 ### Next step
 
 - Don't forget: `conda activate memento`
