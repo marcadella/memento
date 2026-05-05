@@ -12,6 +12,6 @@ class HumanAgent(AgentLike):
     def speak(self):
         return input(f"{self.name}: ")
 
-    def hear(self, speaker_name: str, message: str):
+    def hear(self, speaker_name: str, content: str):
         if speaker_name != self.name:
-            print(f"{speaker_name}: {message}")
+            print(f"{speaker_name}: {content}")
