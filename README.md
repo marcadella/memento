@@ -72,6 +72,30 @@ their own instance.
    changes.
 
 
+#### NEO4j Troubleshooting
+
+**Error `08N09: Connection exception - database unavailable` (or Python equivalent).**
+
+The Neo4j instance is running but the `neo4j` database inside it has been stopped. The
+instance and the databases inside it are managed separately. Desktop's UI does not always
+expose database start/stop controls clearly, so use Neo4j Browser instead:
+  1. In Desktop, click **Query** to open Neo4j Browser.
+  2. At the top of the query view, switch the active database from `neo4j`
+     to `system` (the `system` database manages database lifecycle).
+  3. Run:
+
+  ```cypher
+    START DATABASE neo4j
+  ```
+
+  4. Switch back to `neo4j` and confirm with `RETURN 1`.
+
+
+
+
+
+
+
 ### Next step
 
 - Don't forget: `conda activate memento`
