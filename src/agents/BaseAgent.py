@@ -27,3 +27,10 @@ class BaseAgent(AgentLike):
         self.flash_memory.put(Message(role=role, content=content, name=speaker_name))
         if self.verbose:
             print(self.flash_memory.get())
+
+    def flash(self):
+        """
+        Get the content of the flash memory
+        :return:
+        """
+        return "\n".join([m.to_string() for m in self.flash_memory.get()])

@@ -24,17 +24,6 @@ class ConversationLike(ABC):
                 os.remove(self.conv_path)
 
 
-    def speak(self, speaker_name: str):
-        """
-        Ask an agent to speak.
-        :param speaker_name:
-        """
-        message: str = self.agents[speaker_name].speak()
-        if message:
-            self.tape += [{speaker_name: message}]
-            for agent in self.agents.values():
-                agent.hear(speaker_name, message)
-
     def start(self, enact=False, quiet=False):
         """
         Start a conversation.
@@ -90,7 +79,8 @@ class ConversationLike(ABC):
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
             with open(self.conv_path, "w", encoding="utf-8") as f:
-                yaml.dump(self.tape, f)
+                yaml.dump(self.tape, f, width=float("inf"))
+
 
     @abstractmethod
     def introduction(self):
@@ -101,62 +91,9 @@ class ConversationLike(ABC):
         pass
 
     @abstractmethod
-    def turn(self):
+    def turn(self, cmd=None):
         """
         Conversation turn
         :return: True if the conversation continues, False if it should stop.
         """
         pass
-
-class InteractiveConversation(ConversationLike):
-    """
-    An interactive conversation where each turn, the first human registered controls who speak (or speak himself).
-    """
-    def __init__(self, agents: list[AgentLike], output_dir="output", conversation_name=None, override=False):
-        super().__init__(agents, output_dir, conversation_name, override)
-        self.human_agent = [agent for agent in agents if type(agent) == HumanAgent][0]
-
-    def introduction(self):
-        return f"\nInteractive conversation directed by {self.human_agent.name}.\nSay something or give turn to an AI agent by typing its name. Enter empty input to terminate the conversation."
-
-    def turn(self):
-        human_input = self.human_agent.speak()
-        if not human_input:
-            return False
-        if human_input in self.agents.keys():
-            # If used entered the name of an agent, the latter is invited to speak
-            agent_name = human_input
-            self.speak(agent_name)
-        else:
-            self.tape += [{self.human_agent.name: human_input}]
-            for agent in self.agents.values():
-                agent.hear(self.human_agent.name, human_input)
-
-        return True
-
-class SingleAgentConversation(ConversationLike):
-    """
-    A typical turn by turn conversation between a human (named "H") and an agent.
-    """
-    def __init__(self, agent: AgentLike, output_dir="output", conversation_name=None, override=False):
-        self.agent = agent
-        self.human_agent = HumanAgent("H")
-        super().__init__([self.agent, self.human_agent], output_dir, conversation_name, override)
-
-    def introduction(self):
-        return f"\nEnter empty input to terminate the conversation."
-
-    def turn(self):
-        human_input = self.human_agent.speak()
-
-        if not human_input:
-            return False
-
-        self.tape += [{self.human_agent.name: human_input}]
-        for agent in self.agents.values():
-            agent.hear(self.human_agent.name, human_input)
-
-        self.speak(self.agent.name)
-
-        return True
-
