@@ -24,6 +24,8 @@ class RAGStoreProcess(ProcessLike):
                 }
         }
         
+        self.store_RAG_data = store_RAG_data
+        
         self.functions.append(store_RAG_data_API)
         
     def messages(self, context):
@@ -45,7 +47,7 @@ class RAGStoreProcess(ProcessLike):
         
         
 class RAGRetrieveProcess(ProcessLike):
-    def __init__(self, name, client, model, store_RAG_data):
+    def __init__(self, name, client, model, retrive_RAG_data):
         super().__init__(name, client, model)
         
         retrive_RAG_data_API = {
@@ -66,6 +68,8 @@ class RAGRetrieveProcess(ProcessLike):
                 }
         }
         
+        self.retrive_RAG_data = retrive_RAG_data
+                
         self.functions.append(retrive_RAG_data_API)
         
         
