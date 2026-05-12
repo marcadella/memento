@@ -12,6 +12,10 @@ class BaseAgent(AgentLike):
         super().__init__(name, verbose)
         self.react_processes = ReactToContextProcess("react", client, model, name)
         self.flash_memory = FlashMemory(flash_memory_size)
+        self.registered_commands = {
+            "flash": "Prints the content of the flash memory.",
+            "tokens": "Prints the sum of token used."
+        }
 
     def speak(self) -> str:
         """
@@ -34,3 +38,17 @@ class BaseAgent(AgentLike):
         :return:
         """
         return "\n".join([m.to_string() for m in self.flash_memory.get()])
+
+    def tokens(self, last_n=0):
+        """
+        Get the completion, prompt and total token counts of all the processes.
+        :param last_n: Only last n responses. If 0 (default), return sum for all responses.
+        :return: String.
+        """
+        completion_tokens = self.react_processes.tokens("completion", last_n)
+        prompt_tokens = self.react_processes.tokens("prompt", last_n)
+        total_tokens = self.react_processes.tokens("total", last_n)
+
+        return "\n".join([f"- completion_tokens: {completion_tokens}",
+                            f"- prompt_tokens: {prompt_tokens}",
+                            f"- total_tokens: {total_tokens}"])

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 import json
 from dataclasses import asdict
 
+from openai.types import CompletionUsage
+
 from utilities.Message import Message
 
 
@@ -14,6 +16,7 @@ class ProcessLike(ABC):
         self.client = client # Client to perform calls to LLM
         self.model = model   # LLM
         self.functions = []  # Implementations should fill with implemented functions
+        self.usages: list[CompletionUsage] = []
 
     @abstractmethod
     def messages(self, data) -> list[Message]:
@@ -33,12 +36,13 @@ class ProcessLike(ABC):
         """
         #print(self.messages(context))
 
-        chat = self.client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=[asdict(m) for m in self.messages(data)],
             tools=self.functions
         )
-        response = chat.choices[0]
+        self.usages.append(response.usage)
+        response = response.choices[0]
 
         if response.message.tool_calls is not None:
             for tool_call in response.message.tool_calls:
@@ -50,3 +54,16 @@ class ProcessLike(ABC):
         #print(response)
 
         return response.message.content
+
+    def tokens(self, token_type: str, last_n=0) -> int:
+        """
+        Sum all the tokens used of a specific type.
+        :param token_type: 'completion', 'prompt', 'total'
+        :param last_n: Number of responses to aggregate. If 0 (default), return sum of all responses.
+        :return: Sum of used tokens
+        """
+        attr_name = f"{token_type}_tokens"
+        n = 0
+        for usage in self.usages[-last_n:]:
+            n += getattr(usage, attr_name)
+        return n

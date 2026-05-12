@@ -23,7 +23,6 @@ class ConversationLike(ABC):
             if os.path.exists(self.conv_path):
                 os.remove(self.conv_path)
 
-
     def start(self, enact=False, quiet=False):
         """
         Start a conversation.

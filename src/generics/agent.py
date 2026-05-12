@@ -8,6 +8,7 @@ class AgentLike(ABC):
     def __init__(self, name: str, verbose: bool):
         self.name = name
         self.verbose = verbose
+        self.registered_commands = {}
 
     @abstractmethod
     def speak(self) -> str:
@@ -25,3 +26,6 @@ class AgentLike(ABC):
         :param content: Received message
         """
         pass
+
+    def help(self):
+        return "\n".join([f"- {com}: {descr}" for com, descr in self.registered_commands.items()])

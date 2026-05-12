@@ -12,8 +12,9 @@ class InteractiveConversation(ConversationLike):
         self.human_agent = [agent for agent in agents if type(agent) == HumanAgent][0]
 
     def introduction(self):
-        return (f"\nType your message, or use `>agent_name` to ask an agent to speak.\n"
-                f"You may also call a method on the agent: `>agent_name.method`"
+        return (f"\nType your message, or use `>agent_name` to ask an agent to speak."
+                f"\nYou may also call a method on the agent: `>agent_name.method`"
+                f"\n`>agent_name.help` lists all the commands supported by that agent."
                 f"\nEnter `>exit` input to terminate the conversation.")
 
     def turn(self, cmd=None):
