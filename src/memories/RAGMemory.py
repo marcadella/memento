@@ -34,7 +34,7 @@ class RAGMemory(MemoryLike):
         
         
         self.store_process = RAGStoreProcess(name, client, model, self.store_RAG_data)
-        self.retrieve_process = RAGStoreProcess(name, client, model, self.retrieve_RAG_data)
+        self.retrieve_process = RAGRetrieveProcess(name, client, model, self.retrieve_RAG_data)
         
         # Initialize the Neo4j driver
         self.driver:Driver = make_driver()
@@ -97,3 +97,11 @@ class RAGMemory(MemoryLike):
 
         return retrieval_results
 
+    def put(self, data, metadata=None):
+        self.store_process.apply(data)
+
+    def get(self, query=None) -> list:
+
+        #the database can be too big for a context window so there must be a query for it to retrieve something
+        if query == None:
+            return []

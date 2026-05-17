@@ -16,7 +16,7 @@ class RAGStoreProcess(ProcessLike):
                         "properties": {
                             "text": {
                                 "type": "string",
-                                "description": "text to save to RAG database. It should be short and consise and easy to undestand, but still say enough to be understandable when retrived"
+                                "description": "text to save to RAG database. It should be relatively short, consise, mostly self contained and easy to undestand, but enough to be understandable when retrived"
                             },
                         },
                         "required": ["text"]
@@ -39,7 +39,7 @@ class RAGStoreProcess(ProcessLike):
                     "You have access to long-term memory."
                     "For this memory you have a tool at your disposal:"
                     "You have a tool called 'retrive_RAG_data' that you can use to look up information."
-                    "Strategy: Use 'store_RAG_data' to store information like information, facts, or context. It does not need to be information provided by the user. It can also be information that you have reasoned or a decision you have made to during the task."
+                    "Strategy: Use 'store_RAG_data' to store information like information, facts, or context. It does not need to be information provided by the user. It can also be information that has been reasoned or a decision that have been made during the task."
                     f"Current User Message: '{context}'"
             )
         ]
@@ -54,13 +54,13 @@ class RAGRetrieveProcess(ProcessLike):
             "type": "function",
                 "function": {
                     "name": "retrive_RAG_data", 
-                    "description": "Save a piece of important information, facts, or context into long-term memory for future retrieval.",
+                    "description": "Retrieve a piece of important information, facts, or context from long-term memory for future retrieval.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description":  "The text content/fact that needs to be memorized."
+                                "description":  "Thr query used to search for relevant information"
                             },
                         },
                         "required": ["query"]
