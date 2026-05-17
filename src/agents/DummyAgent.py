@@ -1,6 +1,8 @@
 from generics.agent import AgentLike
+from memories.FlashMemory import FlashMemory
 from memories.KeyValueMemory import KeyValueMemory
 from processes.ReactInConversationProcess import ReactInConversationProcess
+from utilities.Message import Message
 
 
 class DummyAgent(AgentLike):
@@ -10,25 +12,24 @@ class DummyAgent(AgentLike):
 
     def __init__(self, name: str, client, model):
         super().__init__(name, verbose=True)
-        self.processes = {
-            "react": ReactInConversationProcess("react", client, model, name),
-            "memorize": KeyValueMemory("memorize", client, model),
-        }
-        self.history = [] #Infinite memory
+        self.react_processes = ReactInConversationProcess("react", client, model, name)
+        self.kv_memory = KeyValueMemory(name, client, model)
+        self.unbound_memory = FlashMemory(-1)
 
     def speak(self):
         """
         In this implementation, we react to the unbounded memory.
         Note that the keyValueMemory could be used here.
         """
-        return self.processes["react"].apply(self.history)
+        return self.react_processes.apply(self.unbound_memory.get())
 
-    def hear(self, speaker_name: str, message: str):
+    def hear(self, speaker_name: str, content: str):
         """In this implementation, each new message is analysed by the KeyValueMemory process:
           - if something is worth storing in the memory, the LLM makes a call to a storage function (one or more times)
           - if nothing is interesting, the LLM do nothing.
           Then we append the message to the unbounded history.
         """
         role = "assistant" if speaker_name == self.name else "user"
-        self.processes["memorize"].apply(message)
-        self.history.append({"role": role, "content": message, "name": speaker_name})
+        self.kv_memory.put(content)
+        message = Message(role=role, content=content, name=speaker_name)
+        self.unbound_memory.put(message)

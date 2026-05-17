@@ -1,4 +1,5 @@
 from generics.process import ProcessLike
+from utilities.Message import Message
 
 
 class ReactInConversationProcess(ProcessLike):
@@ -10,11 +11,11 @@ class ReactInConversationProcess(ProcessLike):
         super().__init__(process_name, client, model)
         self.agent_name = agent_name
 
-    def messages(self, context):
+    def messages(self, context: list[Message]) -> list[Message]:
         return [
-            {
-                "role": "system",
-                "content": f"Your name is '{self.agent_name}' and you are part of a conversation with multiple users. "
+            Message(
+                role="system",
+                content=f"Your name is '{self.agent_name}' and you are part of a conversation with multiple users. "
                 f"You may answer with an empty string if you have nothing important to say and want to pass your turn to speak. "
-            }
+            )
         ] + context

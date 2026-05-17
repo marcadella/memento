@@ -2,8 +2,6 @@
 
 import argparse
 
-from agents.BaseAgent import BaseAgent
-
 parser = argparse.ArgumentParser(description="Example conversation.")
 
 # Add arguments
@@ -17,7 +15,8 @@ args = parser.parse_args()
 from openai import OpenAI
 import os
 
-from conversation import SingleAgentConversation
+from agents.BaseAgent import BaseAgent
+from conversations.SingleAgentConversation import SingleAgentConversation
 
 ######### Boilerplate
 

@@ -1,6 +1,7 @@
 from generics.agent import AgentLike
+from memories.FlashMemory import FlashMemory
 from processes.ReactToContextProcess import ReactToContextProcess
-from utilities.BoundedContext import BoundedContext
+from utilities.Message import Message
 
 
 class BaseAgent(AgentLike):
@@ -9,23 +10,45 @@ class BaseAgent(AgentLike):
     """
     def __init__(self, name: str, client, model="gpt-4.1-mini", verbose=False, flash_memory_size=10000):
         super().__init__(name, verbose)
-        self.processes = {
-            "react": ReactToContextProcess("react", client, model, name),
+        self.react_processes = ReactToContextProcess("react", client, model, name)
+        self.flash_memory = FlashMemory(flash_memory_size)
+        self.registered_commands = {
+            "flash": "Prints the content of the flash memory.",
+            "tokens": "Prints the sum of token used."
         }
-        self.flash_memory = BoundedContext(flash_memory_size)
 
-    def speak(self):
+    def speak(self) -> str:
         """
         In this implementation, we react to the context.
         """
         context = self.flash_memory.get() # Only for testing purpose
-        return self.processes["react"].apply(context)
+        return self.react_processes.apply(context)
 
-    def hear(self, speaker_name: str, message: str):
+    def hear(self, speaker_name: str, content: str):
         """In this implementation, each new message is ...
         """
         role = "assistant" if speaker_name == self.name else "user"
-        self.flash_memory.append({"role": role, "content": message, "name": speaker_name})
+        self.flash_memory.put(Message(role=role, content=content, name=speaker_name))
         if self.verbose:
-            print(self.flash_memory._current_size())
             print(self.flash_memory.get())
+
+    def flash(self):
+        """
+        Get the content of the flash memory
+        :return:
+        """
+        return "\n".join([m.to_string() for m in self.flash_memory.get()])
+
+    def tokens(self, last_n=0):
+        """
+        Get the completion, prompt and total token counts of all the processes.
+        :param last_n: Only last n responses. If 0 (default), return sum for all responses.
+        :return: String.
+        """
+        completion_tokens = self.react_processes.tokens("completion", last_n)
+        prompt_tokens = self.react_processes.tokens("prompt", last_n)
+        total_tokens = self.react_processes.tokens("total", last_n)
+
+        return "\n".join([f"- completion_tokens: {completion_tokens}",
+                            f"- prompt_tokens: {prompt_tokens}",
+                            f"- total_tokens: {total_tokens}"])

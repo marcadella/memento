@@ -1,4 +1,5 @@
 from generics.process import ProcessLike
+from utilities.Message import Message
 
 
 class ReactToContextProcess(ProcessLike):
@@ -10,10 +11,10 @@ class ReactToContextProcess(ProcessLike):
         super().__init__(process_name, client, model)
         self.agent_name = agent_name
 
-    def messages(self, context):
+    def messages(self, context: list[Message])-> list[Message]:
         return [
-            {
-                "role": "system",
-                "content": f"Your name is '{self.agent_name}' and you are a useful agent. "
-            }
+            Message(
+                role="system",
+                content=f"Your name is '{self.agent_name}' and you are a useful agent. "
+        )
         ] + context

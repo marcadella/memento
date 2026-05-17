@@ -8,7 +8,7 @@ class AgentLike(ABC):
     def __init__(self, name: str, verbose: bool):
         self.name = name
         self.verbose = verbose
-        self.processes: dict = {} # Implementations should fill this with ProcessLike
+        self.registered_commands = {}
 
     @abstractmethod
     def speak(self) -> str:
@@ -19,10 +19,13 @@ class AgentLike(ABC):
         pass
 
     @abstractmethod
-    def hear(self, speaker_name: str, message: str):
+    def hear(self, speaker_name: str, content: str):
         """
         Process a message delivered by some speaker.
         :param speaker_name: Name of the speaker
-        :param message: Received message
+        :param content: Received message
         """
         pass
+
+    def help(self):
+        return "\n".join([f"- {com}: {descr}" for com, descr in self.registered_commands.items()])
