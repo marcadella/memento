@@ -1,3 +1,7 @@
+import os
+
+from openai import OpenAI
+
 from generics.agent import AgentLike
 from memories.FlashMemory import FlashMemory
 from processes.ReactToContextProcess import ReactToContextProcess
@@ -8,9 +12,18 @@ class BaseAgent(AgentLike):
     """
     A simple agent with a flash memory (bounded rolling context).
     """
-    def __init__(self, name: str, client, model="gpt-4.1-mini", verbose=False, flash_memory_size=10000):
+    def __init__(self, name: str, client=None, model="gpt-4.1-mini", verbose=False, flash_memory_size=10000):
         super().__init__(name, verbose)
-        self.react_processes = ReactToContextProcess("react", client, model, name)
+        if client is None:
+            api_url = os.environ.get("CHATUIT_BASE_URL", None)
+            api_key = os.environ.get("CHATUIT_API_KEY", os.environ.get("OPENAI_API_KEY", None))
+
+            self.client = OpenAI(base_url=api_url,
+                            api_key=api_key,
+                            )
+        else:
+            self.client = client
+        self.react_processes = ReactToContextProcess("react", self.client, model, name)
         self.flash_memory = FlashMemory(flash_memory_size)
         self.registered_commands = {
             "flash": "Prints the content of the flash memory.",

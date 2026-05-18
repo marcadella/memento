@@ -12,25 +12,11 @@ parser.add_argument("--override", '-x',  action="store_true", help="Set this fla
 # Parse arguments
 args = parser.parse_args()
 
-from openai import OpenAI
-import os
-
 from agents.BaseAgent import BaseAgent
 from conversations.SingleAgentConversation import SingleAgentConversation
 
-######### Boilerplate
-
-api_url = os.environ.get("CHATUIT_BASE_URL", "http://127.0.0.1:1234/v1/")
-api_key = os.environ.get("CHATUIT_API_KEY", "")
-
-client = OpenAI(base_url=api_url,
-                api_key=api_key,
-                )
-
-########
-
 # We create a conversation instance
-conv = SingleAgentConversation(BaseAgent("A", client, verbose=False),
+conv = SingleAgentConversation(BaseAgent("A", verbose=False),
                                conversation_name=args.name,
                                override=args.override)
 conv.start(enact=args.enact)

@@ -1,4 +1,6 @@
 import os
+import shutil
+
 import yaml
 from abc import ABC, abstractmethod
 
@@ -18,10 +20,14 @@ class ConversationLike(ABC):
         self.output_dir = output_dir # Set to None for no recording
         conversation_name = max(os.listdir(self.output_dir)) if conversation_name == "latest" else conversation_name
         self.conversation_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") if conversation_name is None else conversation_name
-        self.conv_path = f"{self.output_dir}/{self.conversation_name}.yaml"
+        self.conv_dir = f"{self.output_dir}/{self.conversation_name}"
         if override:
-            if os.path.exists(self.conv_path):
-                os.remove(self.conv_path)
+            if os.path.exists(self.conv_dir):
+                shutil.rmtree(self.conv_dir)
+        os.makedirs(self.conv_dir, exist_ok=True)
+        for agent in self.agents.values():
+            agent.setup(self.conv_dir)
+        self.conv_path = f"{self.conv_dir}/conversation.yml"
 
     def start(self, enact=False, quiet=False):
         """
@@ -58,17 +64,22 @@ class ConversationLike(ABC):
             print(f"New conversation {self.conversation_name}")
             original_tape = []
         for line in original_tape:
-            for speaker_name, message in line.items(): # Should be only one item
-                if enact and type(self.agents[speaker_name]) != HumanAgent:
-                    # If re-enacting, we replace the original message with a new one
-                    message = self.agents[speaker_name].speak()
-                self.tape += [{speaker_name: message}]
-                if not quiet:
-                    print(f"{speaker_name}: {message}")
+            for key, value in line.items(): # Should be only one item
+                if key == "_id":
+                    continue
+                else:
+                    speaker_name = key
+                    message = value
+                    if enact and type(self.agents[speaker_name]) != HumanAgent:
+                        # If re-enacting, we replace the original message with a new one
+                        message = self.agents[speaker_name].speak()
+                    self.tape += [{speaker_name: message}]
+                    if not quiet:
+                        print(f"{speaker_name}: {message}")
 
-                for agent in self.agents.values():
-                    if type(agent) is not HumanAgent:
-                        agent.hear(speaker_name, message)
+                    for agent in self.agents.values():
+                        if type(agent) is not HumanAgent:
+                            agent.hear(speaker_name, message)
 
     def write_to_file(self):
         """
@@ -77,8 +88,9 @@ class ConversationLike(ABC):
         if self.output_dir:
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
+            tape_with_line_numbers = [entry | {"_id": nb}  for nb, entry in enumerate(self.tape)]
             with open(self.conv_path, "w", encoding="utf-8") as f:
-                yaml.dump(self.tape, f, width=float("inf"))
+                yaml.dump(tape_with_line_numbers, f, width=float("inf"))
 
 
     @abstractmethod
