@@ -9,10 +9,7 @@ class AgentLike(ABC):
         self.name = name
         self.verbose = verbose
         self.registered_commands = {}
-        self.conv_dir = None # Output directory path
-        # Configured by self.setup() (automatically called by ConversationLike)
-        # Use self.name with an appropriate extension if you want to persist data
-        #self.output = f"{self.conv_dir}/{self.name}.json
+
 
     @abstractmethod
     def speak(self) -> str:
@@ -33,7 +30,3 @@ class AgentLike(ABC):
 
     def help(self):
         return "\n".join([f"- {com}: {descr}" for com, descr in self.registered_commands.items()])
-
-    def setup(self, conv_dir):
-        self.conv_dir = conv_dir
-

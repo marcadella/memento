@@ -4,6 +4,7 @@ from dataclasses import asdict
 
 from openai.types import CompletionUsage
 
+from utilities.Context import ctx
 from utilities.Message import Message
 
 
@@ -34,6 +35,8 @@ class ProcessLike(ABC):
         :param data: Some input data
         :return: LLM response message
         """
+        ctx.append(self.process_name)
+        #print(ctx.current_path())
         #print(self.messages(context))
 
         response = self.client.chat.completions.create(
@@ -52,6 +55,7 @@ class ProcessLike(ABC):
                 fn(**json.loads(function.arguments))
 
         #print(response)
+        ctx.pop()
 
         return response.message.content
 

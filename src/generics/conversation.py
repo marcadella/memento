@@ -8,6 +8,8 @@ from agents.HumanAgent import HumanAgent
 from generics.agent import AgentLike
 from datetime import datetime
 
+from utilities.Context import ctx
+
 
 class ConversationLike(ABC):
     """
@@ -25,9 +27,8 @@ class ConversationLike(ABC):
             if os.path.exists(self.conv_dir):
                 shutil.rmtree(self.conv_dir)
         os.makedirs(self.conv_dir, exist_ok=True)
-        for agent in self.agents.values():
-            agent.setup(self.conv_dir)
         self.conv_path = f"{self.conv_dir}/conversation.yml"
+        ctx.reset(self.conv_dir)
 
     def start(self, enact=False, quiet=False):
         """

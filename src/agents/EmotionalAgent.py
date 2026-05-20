@@ -1,0 +1,99 @@
+import os
+
+from openai import OpenAI
+
+from generics.agent import AgentLike
+from memories.FlashMemory import FlashMemory
+from memories.GraphicalEmotionalState import GraphicalEmotionalState
+from memories.KeyValueMemory import KeyValueMemory
+from memories.LineOfThought import LineOfThought
+from processes.HearingProcess import HearingProcess
+from processes.ReactInConversationProcess import ReactInConversationProcess
+from utilities.Message import Message
+
+
+class EmotionalAgent(AgentLike):
+    """
+    A simple agent with an infinite context memory and an ability to store important information in a dictionary (this memory is not used for anything though).
+    """
+
+    def __init__(self, name: str, client=None, model="gpt-4.1-mini", skip_generation=False):
+        super().__init__(name, verbose=True)
+        if client is None:
+            api_url = os.environ.get("CHATUIT_BASE_URL", None)
+            api_key = os.environ.get("CHATUIT_API_KEY", os.environ.get("OPENAI_API_KEY", None))
+
+            self.client = OpenAI(base_url=api_url,
+                            api_key=api_key,
+                            )
+        else:
+            self.client = client
+
+        # Memories
+        #self.kv_memory = KeyValueMemory(name, self.client, model)
+        self.emotional_state = GraphicalEmotionalState(self.client, skip_generation=skip_generation)
+        self.flash_memory = FlashMemory(10000)
+        self.LOT = LineOfThought()
+
+        # Processes
+        self.hearing_processes = HearingProcess("hearing", self.client, model, name, self.LOT)
+        self.react_process = ReactInConversationProcess("react", self.client, model, name, self.LOT)
+
+        # Commands
+        self.registered_commands = {
+            "flash": "Prints the content of the flash memory.",
+            "tokens": "Prints the sum of token used.",
+            "thoughts": "Prints the line of thoughts."
+        }
+
+    def speak(self):
+        """
+        We react to the diverse memory/states
+        """
+        unmodulated_answer = self.react_process.apply(self.flash_memory.get())
+        print(f"Unmodulated: {unmodulated_answer}")
+        modulated_answer = self.emotional_state.get(unmodulated_answer)[0]
+        return modulated_answer
+
+    def hear(self, speaker_name: str, content: str):
+        """In this implementation, each new message is analysed by the KeyValueMemory process:
+          - if something is worth storing in the memory, the LLM makes a call to a storage function (one or more times)
+          - if nothing is interesting, the LLM do nothing.
+          Then we append the message to the unbounded history.
+        """
+        role = "assistant" if speaker_name == self.name else "user"
+        message = Message(role=role, content=content, name=speaker_name)
+        self.flash_memory.put(message)
+        if role != "assistant":
+            #self.kv_memory.put(content)
+            self.emotional_state.put(self.flash_memory.get())
+            print(self.flash_memory.get())
+            self.hearing_processes.apply(self.flash_memory.get())
+
+    def flash(self):
+        """
+        Get the content of the flash memory
+        :return:
+        """
+        return "\n".join([m.to_string() for m in self.flash_memory.get()])
+
+    def tokens(self, last_n=0):
+        """
+        Get the completion, prompt and total token counts of all the processes.
+        :param last_n: Only last n responses. If 0 (default), return sum for all responses.
+        :return: String.
+        """
+        completion_tokens = self.react_process.tokens("completion", last_n)
+        prompt_tokens = self.react_process.tokens("prompt", last_n)
+        total_tokens = self.react_process.tokens("total", last_n)
+
+        return "\n".join([f"- completion_tokens: {completion_tokens}",
+                            f"- prompt_tokens: {prompt_tokens}",
+                            f"- total_tokens: {total_tokens}"])
+
+    def thoughts(self):
+        """
+        Get the content of the line of thoughts
+        :return:
+        """
+        return "\n".join(self.LOT.get())

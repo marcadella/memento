@@ -1,6 +1,7 @@
 from agents.HumanAgent import HumanAgent
 from generics.agent import AgentLike
 from generics.conversation import ConversationLike
+from utilities.Context import ctx
 
 
 class InteractiveConversation(ConversationLike):
@@ -18,6 +19,7 @@ class InteractiveConversation(ConversationLike):
                 f"\nEnter `>exit` input to terminate the conversation.")
 
     def turn(self, cmd=None):
+        ctx.append(str(len(self.tape)))
         # Get input from user
         cmd = cmd if cmd is not None else input(f"{self.human_agent.name}: ")
 
@@ -41,7 +43,10 @@ class InteractiveConversation(ConversationLike):
 
             if agent_name in self.agents.keys():
                 # If the method does not exist, we print an error message
-                message = getattr(self.agents[agent_name], method, lambda: f"Unknown method {method}")()
+                agent = self.agents[agent_name]
+                ctx.append(agent_name)
+                message = getattr(agent, method, lambda: f"Unknown method {method}")()
+                ctx.pop()
             else:
                 # If the agent does not exist, we print an error message
                 message = f"Unknown agent {agent_name}"
@@ -56,5 +61,7 @@ class InteractiveConversation(ConversationLike):
         else:
             # Otherwise we just print the message along with a repeat of the command that caused it
             print(message + f"\n- - - {cmd} - - -")
+
+        ctx.pop()
 
         return True
