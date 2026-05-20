@@ -9,7 +9,9 @@ from memories.KeyValueMemory import KeyValueMemory
 from memories.LineOfThought import LineOfThought
 from processes.HearingProcess import HearingProcess
 from processes.ReactInConversationProcess import ReactInConversationProcess
+from processes.ReactInConversationWithModulationProcess import ReactInConversationWithModulationProcess
 from utilities.Message import Message
+from PIL import Image
 
 
 class EmotionalAgent(AgentLike):
@@ -17,43 +19,51 @@ class EmotionalAgent(AgentLike):
     A simple agent with an infinite context memory and an ability to store important information in a dictionary (this memory is not used for anything though).
     """
 
-    def __init__(self, name: str, client=None, model="gpt-4.1-mini", skip_generation=False):
+    def __init__(self, name: str, client=None, model="gpt-4.1-mini", skip_generation=False, post_modulation=False, initial_emotion="sad"):
         super().__init__(name, verbose=True)
         if client is None:
-            api_url = os.environ.get("CHATUIT_BASE_URL", None)
-            api_key = os.environ.get("CHATUIT_API_KEY", os.environ.get("OPENAI_API_KEY", None))
+            api_url = os.environ.get("CHATUIT_BASE_URL2", None)
+            api_key = os.environ.get("CHATUIT_API_KEY2", os.environ.get("OPENAI_API_KEY", None))
 
             self.client = OpenAI(base_url=api_url,
                             api_key=api_key,
                             )
         else:
             self.client = client
+        self.post_modulation = post_modulation
 
         # Memories
         #self.kv_memory = KeyValueMemory(name, self.client, model)
-        self.emotional_state = GraphicalEmotionalState(self.client, skip_generation=skip_generation)
+        self.emotional_state = GraphicalEmotionalState(self.client, skip_generation=skip_generation, initial_emotional_state=f"dataset/emotions/{initial_emotion}.png")
         self.flash_memory = FlashMemory(10000)
         self.LOT = LineOfThought()
 
         # Processes
         self.hearing_processes = HearingProcess("hearing", self.client, model, name, self.LOT)
-        self.react_process = ReactInConversationProcess("react", self.client, model, name, self.LOT)
+        if self.post_modulation:
+            self.speaking_process = ReactInConversationProcess("speaking", self.client, model, name, self.LOT)
+        else:
+            self.speaking_process = ReactInConversationWithModulationProcess("speaking", self.client, model, name,
+                                                                             self.LOT,
+                                                                             self.emotional_state)
 
         # Commands
         self.registered_commands = {
             "flash": "Prints the content of the flash memory.",
             "tokens": "Prints the sum of token used.",
-            "thoughts": "Prints the line of thoughts."
+            "thoughts": "Prints the line of thoughts.",
+            "emotions": "Shows the emotions in an external viewer."
         }
 
     def speak(self):
         """
         We react to the diverse memory/states
         """
-        unmodulated_answer = self.react_process.apply(self.flash_memory.get())
-        print(f"Unmodulated: {unmodulated_answer}")
-        modulated_answer = self.emotional_state.get(unmodulated_answer)[0]
-        return modulated_answer
+        answer = self.speaking_process.apply(self.flash_memory.get())
+        if self.post_modulation:
+            print(f"Unmodulated: {answer}")
+            answer = self.emotional_state.get(answer)[0]
+        return answer
 
     def hear(self, speaker_name: str, content: str):
         """In this implementation, each new message is analysed by the KeyValueMemory process:
@@ -83,9 +93,9 @@ class EmotionalAgent(AgentLike):
         :param last_n: Only last n responses. If 0 (default), return sum for all responses.
         :return: String.
         """
-        completion_tokens = self.react_process.tokens("completion", last_n)
-        prompt_tokens = self.react_process.tokens("prompt", last_n)
-        total_tokens = self.react_process.tokens("total", last_n)
+        completion_tokens = self.speaking_process.tokens("completion", last_n)
+        prompt_tokens = self.speaking_process.tokens("prompt", last_n)
+        total_tokens = self.speaking_process.tokens("total", last_n)
 
         return "\n".join([f"- completion_tokens: {completion_tokens}",
                             f"- prompt_tokens: {prompt_tokens}",
@@ -97,3 +107,7 @@ class EmotionalAgent(AgentLike):
         :return:
         """
         return "\n".join(self.LOT.get())
+
+    def emotions(self):
+        Image.open(self.emotional_state.last_location).show()
+        return "<Image shown in external viewer.>"

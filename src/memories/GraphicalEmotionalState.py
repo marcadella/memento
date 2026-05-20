@@ -13,7 +13,7 @@ class GraphicalEmotionalState(MemoryLike):
         super().__init__()
         self.client = client
         self.image_model = "gpt-image-1"
-        self.text_model = "gpt-4.1-mini"
+        self.text_model = "gpt-4.1" #Do not use mini!
         self.text_detail_high = False
         self.size = "1024x1024"
         self.initial_emotional_state = initial_emotional_state
@@ -51,8 +51,6 @@ class GraphicalEmotionalState(MemoryLike):
                                 f"Your task is to rewrite what the user asks you to rewrite by solely changing the tone. "
                                 f"In other words, impersonate someone having the mental state based on the provided image and adapt the tone accordingly. "
                                 f"Do NOT mention the image: it is simply provided to guide your tone."
-                                f"Ex: if the mood is 'angry', then rewrite 'Paris is in France, not in Belgium. Learning is a long process, but you are getting there!' "
-                                f"with: 'Since when is Paris in Belgium? Everyone knows that Paris is in France! Come on! Make some efforts!'"
                     }
                     ]
                  },
@@ -79,7 +77,7 @@ class GraphicalEmotionalState(MemoryLike):
                 f"Text: '{data}'")
 
     def _edit_prompt(self, data):
-        return (f"Without changing the overall meaning, transform slightly this image to incorporate a change of mood/emotion/feeling induced by the provided text. "
+        return (f"Without changing drastically the picture, transform some areas slightly (less than 25% of the surface should change) to incorporate a change of mood/emotion/feeling induced by the provided text. "
                 f"The image should remain abstract. "
                 f"Use lines, colors, and textures, rather than recognizable iconic representations, symbols, words, or human beings."
                 f"Text: '{data}'")
