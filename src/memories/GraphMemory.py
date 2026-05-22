@@ -253,3 +253,55 @@ class GraphMemory(MemoryLike):
                 results.append(f"{record['speaker']} said: {record['content']}")
 
         return results
+    
+    def get_retrieve_tooling(self) -> dict:
+        """Expose graph retrieval as an LLM tool.
+
+        Returns a dict with the OpenAI tool schema, an explanation for the
+        system prompt, and the callable that the tool dispatcher invokes.
+        Mirrors the pattern in RAGMemory.get_retrieve_tooling() so agents
+        can wire memory backends in interchangeably.
+
+        Returns:
+            Dict with keys:
+                api: OpenAI tool/function schema
+                explanation: text for the system prompt describing the tool
+                func: the callable invoked when the LLM calls the tool
+        """
+        
+        api = {
+            "type": "function",
+            "function": {
+                "name": "retrieve_from_graph",
+                "description": (
+                    "Retrieve facts and past messages relevant to a query "
+                    "from the graph memory. Use this when you need to recall "
+                    "what you know about a person, place, topic, or past "
+                    "conversation."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "A natural-language query describing what to "
+                                "recall. Examples: 'what do I know about "
+                                "Marcus', 'what has the user said about food'."
+                            ),
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        }
+
+        explanation = (
+            "You have access to long-term graph memory via a tool called "
+            "'retrieve_from_graph'. Call it with a natural-language query "
+            "when you need to recall facts about people, places, or topics "
+            "the user has mentioned in past conversations. The tool returns "
+            "a list of facts and quoted messages."
+        )
+
+        return {"api": api, "explanation": explanation, "func": self.get}
