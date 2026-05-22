@@ -94,7 +94,16 @@ expose database start/stop controls clearly, so use Neo4j Browser instead:
 
 
 
+### Graph memory dev tools
 
+Three helper scripts in `scripts/` for development:
+
+- `python scripts/test_graph_memory.py` — populate the graph with 4 sample messages under `agent_id="TestAgent"`.
+- `python scripts/test_graph_retrieval.py` — run sample queries against `TestAgent`. Requires running `test_graph_memory.py` first.
+- `python scripts/clear_graph.py --agent-id TestAgent` — clear data for one agent.
+- `python scripts/clear_graph.py --all` — clear everything (asks for typed `yes` confirmation).
+
+Schema is preserved across clears.
 
 
 
