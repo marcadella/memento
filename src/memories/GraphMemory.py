@@ -176,11 +176,80 @@ class GraphMemory(MemoryLike):
 
     # -------- read path --------
 
-    def get(self, query=None) -> list:
+    def get(self, query=None) -> list[str]:
         """
-        Retrieve memory matching a query.
-        Not implemented yet. Retrieval (hybrid vector + graph traversal).
-        """
-        # TODO 
+        Retrieve memory relevant to a query using hybrid retrieval.
 
-        raise NotImplementedError("GraphMemory.get() is not implemented yet!")
+        Combines vector search over entities (with 1-hop traversal in both
+        directions) and vector search over messages. Returns formatted
+        strings ready to drop into a prompt.
+
+        Args:
+            query: Natural-language query. If None or empty, returns [].
+
+        Returns:
+            A list of strings, each describing one retrieved fact or
+            quoted past message. Empty list if query is empty.
+        """
+
+        # No query --> nothing to retrieve. Empty list, no DB call.
+        if not query or not query.strip():
+            return []
+
+        # Embed the query once. Used for both vector searches below.
+        query_embedding = embed_text(self.client, query)
+
+        results: list[str] = []
+
+        with self.driver.session() as session:
+            # Vector search on entities (top 5 for this agent), then 1-hop
+            # traversal in both directions. The new Cypher 25 SEARCH clause
+            # replaces the deprecated db.index.vector.queryNodes procedure.
+            # WHERE inside SEARCH filters at index level.
+
+            entity_query = """
+            MATCH (e:Entity)
+            SEARCH e IN (
+                VECTOR INDEX entity_embedding
+                FOR $query_embedding
+                LIMIT 5
+            )
+            WHERE e.agent_id = $agent_id
+            OPTIONAL MATCH (e)-[r:RELATES]-(other:Entity)
+            WHERE r.agent_id = $agent_id
+            RETURN startNode(r).name AS head,
+                r.type AS relation,
+                endNode(r).name AS tail
+            """
+
+            result = session.run(entity_query, query_embedding=query_embedding, agent_id=self.agent_id)
+
+            # Format each triple. Skip rows where the seed entity had no
+            # relations (OPTIONAL MATCH gives those rows with nulls).
+            for record in result:
+                if record["relation"] is None:
+                    continue
+
+                results.append(f"{record['head']} {record['relation']} {record['tail']}")
+
+
+            # Vector search on messages (top 3 for this agent). Same new
+            # SEARCH syntax. No traversal needed.
+
+            message_query = """
+            MATCH (m:Message)
+            SEARCH m IN (
+                VECTOR INDEX message_embedding
+                FOR $query_embedding
+                LIMIT 3
+            )
+            WHERE m.agent_id = $agent_id
+            RETURN m.speaker AS speaker, m.content AS content
+            """
+
+            result = session.run(message_query, query_embedding=query_embedding, agent_id=self.agent_id)
+
+            for record in result:
+                results.append(f"{record['speaker']} said: {record['content']}")
+
+        return results
