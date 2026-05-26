@@ -5,6 +5,8 @@ RAG-based memory using Neo4j.
 
 """
 
+from tempfile import tempdir
+
 from generics.memory import MemoryLike
 from neo4j import Driver
 from rag.connection import make_driver
@@ -28,7 +30,7 @@ class RAGMemory(MemoryLike):
         super().__init__()
         
         
-        self.store_process = RAGStoreProcess(name, client, model, self.store_RAG_data)
+        self.store_process = RAGStoreProcess(f"{name}.RAG_mem", client, model, self.store_RAG_data)
         
         #no need to have a retrieve process query should be enough to find correct data
         #self.retrieve_process = RAGRetrieveProcess(name, client, model, self.retrieve_RAG_data)
@@ -73,7 +75,6 @@ class RAGMemory(MemoryLike):
         Stores text content as nodes with vector embeddings in Neo4j.
         """
         
-        print(f"store used for:\n {text}")
 
 
         #add some preprocessing here. for example cut text if too long, make text  more consise
@@ -102,27 +103,28 @@ class RAGMemory(MemoryLike):
         Retrieves context using vector search 
         """
 
-        print(f"retrieve used:\n{query}")
 
         retrieval_results = self.retriever.get_search_results(query_text=query, top_k=self.top_k_results)
 
         l = [record.data()["node"]["text"] for record in retrieval_results.records]
 
-        print("\n".join(l))
-
         return l
 
 
-    def put(self, data: Message | str, metadata=None, use_llm_process = True):
+    def put(self, data: Message | str | list[Message], metadata=None, use_llm_process = True):
         
         #Is to check if one should use and llm to process the data before adding to memory
         if use_llm_process == True:
             self.store_process.apply(data)
 
         else:
-            print("hello\n\n\n")
             if isinstance(data, Message):
                 data = data.to_string()
+            elif isinstance(data,list):
+                temp = []
+                for m in data:
+                    temp.append(m.to_string())
+                    "\n".join(temp)
 
             self.store_RAG_data(data)
 

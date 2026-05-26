@@ -12,7 +12,7 @@ class RAGAgent(AgentLike):
         super().__init__(name, verbose)
         self.rag_memory = RAGMemory(name, client, model)
         self.registered_commands = {
-            "retrieve": "Prints the content that is related to the ",
+            "retrieve": "Prints the content that is related to the query",
             "tokens": "Prints the sum of token used."
         }
         store = self.rag_memory.get_store_tooling()
@@ -21,17 +21,15 @@ class RAGAgent(AgentLike):
         self.speak_process = RAGRetrieveProcess(name, client, model, retrieve["func"])
 
         #naive context
-        self.context_max_size = 100
-        self.context_text = ""
+        self.context_max_messages = 10
+        self.context_messages = []
 
     def speak(self) -> str:
         """
         In this implementation, we react to the context.
         """
 
-        output = self.speak_process.apply(self.context_text)
-
-
+        output = self.speak_process.apply(self.context_messages)
 
         return output
 
@@ -39,23 +37,28 @@ class RAGAgent(AgentLike):
         """In this implementation, each new message is ...
         """
 
-        print(content)
 
-        role = "yourself" if speaker_name == self.name else "user"
+        role = "assistant" if speaker_name == self.name else "user"
         #basically used to format the text
         msg = Message(role=role, content=content, name=speaker_name)
 
-        #give context to hopefully get better saving results
-        self.rag_memory.put("".join(["For context:\n", self.context_text, "\nNew message:\n", msg.to_string()]))
-
         self.add_to_context(msg)
 
+
+        #give context to hopefully get better saving results
+        if role!= "assistant":
+            self.rag_memory.put(self.context_messages)
+        #else:
+            #self.rag_memory.put("".join(["Previous messages:\n", self.context_text, "\nNew message:\n", msg.to_string()]))
+
+
+
     def add_to_context(self, msg):
-        self.context_text = self.context_text + "\n" + msg.to_string()
+        self.context_messages.append(msg)
 
         #cut context when too long
-        if len(self.context_text) > self.context_max_size:
-            self.context_text = self.context_text[-self.context_max_size:]
+        if len(self.context_messages) > self.context_max_messages:
+            self.context_messages = self.context_messages[-self.context_max_messages:]
 
 
     def retrieve(self, query = None):
