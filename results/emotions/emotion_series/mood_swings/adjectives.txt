@@ -1,0 +1,8 @@
+['calm, contemplative, mysterious']
+['mysterious, calm, introspective']
+['calm, contemplative, mysterious']
+['calm, mysterious, contemplative']
+['calm, mysterious, flowing']
+['calm, mysterious, introspective']
+['intense, chaotic, energetic']
+['angry, aggressive, menacing']

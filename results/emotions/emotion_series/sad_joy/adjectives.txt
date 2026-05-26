@@ -1,0 +1,8 @@
+['mysterious, eerie, somber']
+['mysterious, calm, introspective']
+['calm, mysterious, contemplative']
+['Calm, contemplative, hopeful']
+['Calm, mysterious, ethereal']
+['calm, hopeful, serene']
+['warmth, energy, serenity']
+['Energetic, vibrant, uplifting']

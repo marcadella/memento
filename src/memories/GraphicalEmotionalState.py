@@ -6,10 +6,11 @@ from pathlib import Path
 from generics.memory import MemoryLike
 from utilities.Context import ctx
 from utilities.EmotionExplorator import EmotionExplorator
+from utilities.client import default_client
 
 
 class GraphicalEmotionalState(MemoryLike):
-    def __init__(self, client, initial_emotional_state="dataset/emotions/sad.png", skip_generation=False):
+    def __init__(self, client=default_client, initial_emotional_state="results/emotions/sad.png", skip_generation=False):
         super().__init__()
         self.client = client
         self.image_model = "gpt-image-1"
@@ -73,12 +74,13 @@ class GraphicalEmotionalState(MemoryLike):
         return [response.output_text]
 
     def _image_prompt(self, data):
-        return (f"Create an image capturing as best as possible the mood/emotion/feel of the following text. "
-                f"Text: '{data}'")
+        return (f"Create an abstract image capturing the mood/emotion given by the following description: '{data}'. "
+                f"Use lines, colors, and textures, rather than recognizable iconic representations, symbols, words, or human beings.")
 
     def _edit_prompt(self, data):
-        return (f"Without changing drastically the picture, transform some areas slightly (less than 25% of the surface should change) to incorporate a change of mood/emotion/feeling induced by the provided text. "
-                f"The image should remain abstract. "
+        #transform some areas slightly
+        return (f"Without changing drastically the picture, add a few touches (less than 10% of the surface should change) to incorporate a change of mood/emotion/feeling induced by the provided text. "
+                f"The image should remain abstract. Do not draw smileys or human faces as this would be unprofessional."
                 f"Use lines, colors, and textures, rather than recognizable iconic representations, symbols, words, or human beings."
                 f"Text: '{data}'")
 
@@ -87,7 +89,7 @@ class GraphicalEmotionalState(MemoryLike):
         if self.skip_generation:
             shutil.copy(self.last_location, new_location)
         else:
-            if os.path.exists(self.last_location):
+            if self.last_location is not None and os.path.exists(self.last_location):
                 print(f">>> Editing emotion {self.last_location}")
                 result = self.client.images.edit(
                     model=self.image_model,

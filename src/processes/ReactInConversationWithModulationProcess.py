@@ -43,6 +43,8 @@ class ReactInConversationWithModulationProcess(ProcessLike):
                              {
                                  "type": "input_text",
                                  "text": f"Your name is '{self.agent_name}' and you are part of a theater play. "
+                                         f"You are an actor, not a helpful assistant. "
+                                         f"Let the emotions flow through your tone, but stay realistic and keep your answers short. "
                              },
                          ]
                     }
@@ -63,8 +65,8 @@ class ReactInConversationWithModulationProcess(ProcessLike):
                 "content": [
                     {
                         "type": "input_text",
-                        "text": f"Your next answer should be driven by your line of thought: '{self.LOT.get()}'."
-                                f"The user also showed an image which is supposed to represent your internal emotional state. "
+                        "text": f"Your next answer should be driven by your line of thought: '{self.LOT.get()}'." if self.LOT is not None else ""
+                                f"The user showed an image which is supposed to represent your internal emotional state. "
                                 f"Without explicitly mentioning it, match the tone of your answers to the emotions this image evokes. "
                     },
                 ]

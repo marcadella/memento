@@ -64,11 +64,10 @@ class ConversationLike(ABC):
         else:
             print(f"New conversation {self.conversation_name}")
             original_tape = []
-        for line in original_tape:
-            for key, value in line.items(): # Should be only one item
-                if key == "_id":
-                    continue
-                else:
+        for turn in original_tape:
+            ctx.append(str(turn["_id"]))
+            for key, value in turn.items():
+                if key != "_id":
                     speaker_name = key
                     message = value
                     if enact and type(self.agents[speaker_name]) != HumanAgent:
@@ -81,6 +80,7 @@ class ConversationLike(ABC):
                     for agent in self.agents.values():
                         if type(agent) is not HumanAgent:
                             agent.hear(speaker_name, message)
+            ctx.pop()
 
     def write_to_file(self):
         """

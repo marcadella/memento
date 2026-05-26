@@ -1,11 +1,10 @@
 import base64
-import os
 
-from openai import OpenAI
+from utilities.client import default_client
 
 
 class EmotionExplorator:
-    def __init__(self, name, emotion=None, out_path="dataset/emotions", client=None):
+    def __init__(self, name, emotion=None, out_path="results/emotions", client=default_client):
         super().__init__()
         self.image_model = "gpt-image-1"
         self.text_model = "gpt-4.1-mini"
@@ -14,15 +13,7 @@ class EmotionExplorator:
         self.size = "1024x1024"
         self.text_detail_high = False
         self.file_path = f"{out_path}/{self.name}.png"
-        if client is None:
-            api_url = os.environ.get("CHATUIT_BASE_URL", None)
-            api_key = os.environ.get("CHATUIT_API_KEY", os.environ.get("OPENAI_API_KEY", None))
-
-            self.client = OpenAI(base_url=api_url,
-                             api_key=api_key,
-                             )
-        else:
-            self.client = client
+        self.client = client
 
     def _image_prompt(self, data):
         return (f"Create an abstract image capturing the mood/emotion given by the following description: '{data}'. "

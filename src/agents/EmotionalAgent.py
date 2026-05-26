@@ -1,7 +1,3 @@
-import os
-
-from openai import OpenAI
-
 from generics.agent import AgentLike
 from memories.FlashMemory import FlashMemory
 from memories.GraphicalEmotionalState import GraphicalEmotionalState
@@ -11,6 +7,7 @@ from processes.HearingProcess import HearingProcess
 from processes.ReactInConversationProcess import ReactInConversationProcess
 from processes.ReactInConversationWithModulationProcess import ReactInConversationWithModulationProcess
 from utilities.Message import Message
+from utilities.client import default_client
 from PIL import Image
 
 
@@ -19,24 +16,17 @@ class EmotionalAgent(AgentLike):
     A simple agent with an infinite context memory and an ability to store important information in a dictionary (this memory is not used for anything though).
     """
 
-    def __init__(self, name: str, client=None, model="gpt-4.1-mini", skip_generation=False, post_modulation=False, initial_emotion="sad"):
+    def __init__(self, name: str, client=default_client, model="gpt-4.1-mini", skip_generation=False, post_modulation=False, initial_emotion="elegance", skip_LOT=False):
         super().__init__(name, verbose=True)
-        if client is None:
-            api_url = os.environ.get("CHATUIT_BASE_URL2", None)
-            api_key = os.environ.get("CHATUIT_API_KEY2", os.environ.get("OPENAI_API_KEY", None))
-
-            self.client = OpenAI(base_url=api_url,
-                            api_key=api_key,
-                            )
-        else:
-            self.client = client
+        self.client = client
         self.post_modulation = post_modulation
 
         # Memories
         #self.kv_memory = KeyValueMemory(name, self.client, model)
-        self.emotional_state = GraphicalEmotionalState(self.client, skip_generation=skip_generation, initial_emotional_state=f"dataset/emotions/{initial_emotion}.png")
+        self.emotional_state = GraphicalEmotionalState(self.client, skip_generation=skip_generation, initial_emotional_state=f"results/emotions/{initial_emotion}.png")
         self.flash_memory = FlashMemory(10000)
         self.LOT = LineOfThought()
+        self.skip_LOT = skip_LOT
 
         # Processes
         self.hearing_processes = HearingProcess("hearing", self.client, model, name, self.LOT)
@@ -44,7 +34,7 @@ class EmotionalAgent(AgentLike):
             self.speaking_process = ReactInConversationProcess("speaking", self.client, model, name, self.LOT)
         else:
             self.speaking_process = ReactInConversationWithModulationProcess("speaking", self.client, model, name,
-                                                                             self.LOT,
+                                                                             None if not self.skip_LOT else self.LOT,
                                                                              self.emotional_state)
 
         # Commands
@@ -76,7 +66,7 @@ class EmotionalAgent(AgentLike):
         self.flash_memory.put(message)
         if role != "assistant":
             #self.kv_memory.put(content)
-            self.emotional_state.put(self.flash_memory.get())
+            self.emotional_state.put(self.flash_memory.get()[-1])
             print(self.flash_memory.get())
             self.hearing_processes.apply(self.flash_memory.get())
 

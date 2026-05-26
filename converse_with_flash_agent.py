@@ -2,7 +2,7 @@
 
 import argparse
 
-parser = argparse.ArgumentParser(description="Example conversation.")
+parser = argparse.ArgumentParser(description="Conversation with an agent possessing only a flash memory")
 
 # Add arguments
 parser.add_argument("--name", "-n", type=str, default="example", help="Conversation name")

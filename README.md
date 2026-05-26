@@ -110,7 +110,7 @@ Schema is preserved across clears.
 ### Next step
 
 - Don't forget: `conda activate memento`
-- Run `python example.py`, which is an example of running a conversation between a human and 2 AI agents.
+- Run `python converse_with_flash_agent.py`, which is an example of running a conversation between a human and an AI agents.
 
 In case a package added by another contributor to `environment.yml` is missing on your machine, simply run:
 - `conda env update -f environment.yml --prune`
