@@ -13,7 +13,7 @@ from PIL import Image
 
 class EmotionalAgent(AgentLike):
     """
-    A simple agent with an infinite context memory and an ability to store important information in a dictionary (this memory is not used for anything though).
+    An agent with a flash memory, a line of thought (LOT) and an emotional state.
     """
 
     def __init__(self, name: str, client=default_client, model="gpt-4.1-mini", skip_generation=False, post_modulation=False, initial_emotion="elegance", skip_LOT=False):

@@ -7,13 +7,16 @@ from utilities.client import default_client
 
 class BaseAgent(AgentLike):
     """
-    A simple agent with a flash memory (bounded rolling context).
+    A simple agent with a flash memory only.
     """
     def __init__(self, name: str, client=default_client, model="gpt-4.1-mini", verbose=False, flash_memory_size=10000):
         super().__init__(name, verbose)
         self.client = client
+        # Conscious process generating answers
         self.react_processes = ReactToContextProcess("react", self.client, model, name)
+        # Flash memory (essentially a very small context window)
         self.flash_memory = FlashMemory(flash_memory_size)
+        # Commands which can be used during a conversation: >agent_name.command
         self.registered_commands = {
             "flash": "Prints the content of the flash memory.",
             "tokens": "Prints the sum of token used."
@@ -21,13 +24,14 @@ class BaseAgent(AgentLike):
 
     def speak(self) -> str:
         """
-        In this implementation, we react to the context.
+        In this implementation, we only react to the context.
         """
         context = self.flash_memory.get() # Only for testing purpose
         return self.react_processes.apply(context)
 
     def hear(self, speaker_name: str, content: str):
-        """In this implementation, each new message is ...
+        """
+        In this implementation, each new message is simply appended to the flash memory
         """
         role = "assistant" if speaker_name == self.name else "user"
         self.flash_memory.put(Message(role=role, content=content, name=speaker_name))
@@ -37,7 +41,7 @@ class BaseAgent(AgentLike):
     def flash(self):
         """
         Get the content of the flash memory
-        :return:
+        :return: String
         """
         return "\n".join([m.to_string() for m in self.flash_memory.get()])
 
