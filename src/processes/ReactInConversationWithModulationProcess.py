@@ -1,7 +1,7 @@
 import base64
 
 from generics.process import ProcessLike
-from memories.GraphicalEmotionalState import GraphicalEmotionalState
+from memories.PictorialEmotionalState import PictorialEmotionalState
 from memories.LineOfThought import LineOfThought
 from utilities.Context import ctx
 from utilities.Message import Message
@@ -12,7 +12,7 @@ class ReactInConversationWithModulationProcess(ProcessLike):
     Example of output process where the LLM is requested to produce an answer given a context using a system prompt.
     The agent knows its name, and it is aware that there may be multiple users taking part of the discussion.
     """
-    def __init__(self, process_name, client, model, agent_name, LOT: LineOfThought, emotional_state: GraphicalEmotionalState):
+    def __init__(self, process_name, client, model, agent_name, LOT: LineOfThought, emotional_state: PictorialEmotionalState):
         super().__init__(process_name, client, model)
         self.agent_name = agent_name
         self.LOT = LOT
@@ -43,8 +43,8 @@ class ReactInConversationWithModulationProcess(ProcessLike):
                              {
                                  "type": "input_text",
                                  "text": f"Your name is '{self.agent_name}' and you are part of a theater play. "
-                                         f"You are an actor, not a helpful assistant. "
-                                         f"Let the emotions flow through your tone, but stay realistic and keep your answers short. "
+                                         #f"You are an actor, not a helpful assistant. "
+                                         #f"Let the emotions flow through your tone, but stay realistic and keep your answers short. "
                              },
                          ]
                     }
@@ -52,7 +52,9 @@ class ReactInConversationWithModulationProcess(ProcessLike):
             {
                 "role": "user",
                 "content": [
-                    {"type": "input_text", "text": "Your current emotional state image:"},
+                    {"type": "input_text", "text": f"By the way, just as a side note: this image is supposed to represent your internal emotional state. "
+                                f"Without explicitly mentioning it, match the tone of your answer to the mood this image evokes. "
+                                f"Do not overdo it: it should remain something someone would say in a typical conversation. "},
                     {
                         "type": "input_image",
                         "image_url": f"data:image/png;base64,{image_b64}",
@@ -65,9 +67,7 @@ class ReactInConversationWithModulationProcess(ProcessLike):
                 "content": [
                     {
                         "type": "input_text",
-                        "text": f"Your next answer should be driven by your line of thought: '{self.LOT.get()}'." if self.LOT is not None else ""
-                                f"The user showed an image which is supposed to represent your internal emotional state. "
-                                f"Without explicitly mentioning it, match the tone of your answers to the emotions this image evokes. "
+                        "text": f"Do NOT talk about the image. Rather your next answer should be driven by your line of thought: '{self.LOT.get()}'." if self.LOT is not None else ""
                     },
                 ]
             }]

@@ -9,7 +9,7 @@ from utilities.EmotionExplorator import EmotionExplorator
 from utilities.client import default_client
 
 
-class GraphicalEmotionalState(MemoryLike):
+class PictorialEmotionalState(MemoryLike):
     def __init__(self, client=default_client, initial_emotional_state="results/emotions/sad.png", skip_generation=False):
         super().__init__()
         self.client = client
@@ -109,9 +109,8 @@ class GraphicalEmotionalState(MemoryLike):
             with open(new_location, "wb") as f:
                 f.write(base64.b64decode(image_base64))
 
-        path = Path(new_location)
+        #path = Path(new_location)
+        #new_emotions = EmotionExplorator(path.name.removesuffix(".png"), out_path=path.parent, client=self.client).get()
+        #print(f">>> New emotion {new_location}: {new_emotions}")
 
-        new_emotions = EmotionExplorator(path.name.removesuffix(".png"), out_path=path.parent, client=self.client).get()
-
-        print(f">>> New emotion {new_location}: {new_emotions}")
         self.last_location = new_location

@@ -2,7 +2,7 @@
 
 import argparse
 
-from memories.GraphicalEmotionalState import GraphicalEmotionalState
+from memories.PictorialEmotionalState import PictorialEmotionalState
 from utilities.Context import ctx
 
 parser = argparse.ArgumentParser(description="Generate a series of pictorial emotions")
@@ -23,7 +23,7 @@ if args.prolongate > 0:
 else:
     initial_emotional_state = args.initial
 
-ges = GraphicalEmotionalState(initial_emotional_state=initial_emotional_state)
+ges = PictorialEmotionalState(initial_emotional_state=initial_emotional_state)
 for step in range(args.prolongate, args.prolongate + args.steps):
     ctx.append(f"{step}")
     ges.put(args.gradient)

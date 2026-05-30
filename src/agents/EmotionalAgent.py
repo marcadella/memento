@@ -1,6 +1,6 @@
 from generics.agent import AgentLike
 from memories.FlashMemory import FlashMemory
-from memories.GraphicalEmotionalState import GraphicalEmotionalState
+from memories.PictorialEmotionalState import PictorialEmotionalState
 from memories.KeyValueMemory import KeyValueMemory
 from memories.LineOfThought import LineOfThought
 from processes.HearingProcess import HearingProcess
@@ -23,7 +23,7 @@ class EmotionalAgent(AgentLike):
 
         # Memories
         #self.kv_memory = KeyValueMemory(name, self.client, model)
-        self.emotional_state = GraphicalEmotionalState(self.client, skip_generation=skip_generation, initial_emotional_state=f"results/emotions/{initial_emotion}.png")
+        self.emotional_state = PictorialEmotionalState(self.client, skip_generation=skip_generation, initial_emotional_state=f"results/emotions/{initial_emotion}.png")
         self.flash_memory = FlashMemory(10000)
         self.LOT = LineOfThought()
         self.skip_LOT = skip_LOT
@@ -33,9 +33,9 @@ class EmotionalAgent(AgentLike):
         if self.post_modulation:
             self.speaking_process = ReactInConversationProcess("speaking", self.client, model, name, self.LOT)
         else:
-            self.speaking_process = ReactInConversationWithModulationProcess("speaking", self.client, model, name,
-                                                                             None if not self.skip_LOT else self.LOT,
-                                                                             self.emotional_state)
+            self.speaking_process = ReactInConversationWithModulationProcess(process_name="speaking", client=self.client, model="gpt-4.1", agent_name=name,
+                                                                             LOT=None if not self.skip_LOT else self.LOT,
+                                                                             emotional_state=self.emotional_state)
 
         # Commands
         self.registered_commands = {
@@ -67,7 +67,7 @@ class EmotionalAgent(AgentLike):
         if role != "assistant":
             #self.kv_memory.put(content)
             self.emotional_state.put(self.flash_memory.get()[-1])
-            print(self.flash_memory.get())
+            #print(self.flash_memory.get())
             self.hearing_processes.apply(self.flash_memory.get())
 
     def flash(self):
@@ -83,12 +83,12 @@ class EmotionalAgent(AgentLike):
         :param last_n: Only last n responses. If 0 (default), return sum for all responses.
         :return: String.
         """
-        completion_tokens = self.speaking_process.tokens("completion", last_n)
-        prompt_tokens = self.speaking_process.tokens("prompt", last_n)
+        completion_tokens = self.speaking_process.tokens("output", last_n)
+        prompt_tokens = self.speaking_process.tokens("input", last_n)
         total_tokens = self.speaking_process.tokens("total", last_n)
 
-        return "\n".join([f"- completion_tokens: {completion_tokens}",
-                            f"- prompt_tokens: {prompt_tokens}",
+        return "\n".join([f"- output_tokens: {completion_tokens}",
+                            f"- input_tokens: {prompt_tokens}",
                             f"- total_tokens: {total_tokens}"])
 
     def thoughts(self):

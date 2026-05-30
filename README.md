@@ -12,19 +12,11 @@ they can decide when to store, update, or retrieve information, mimicking a huma
 In this work, we experiment with three types of agentic memory strategies such as:
 - RAG-based,
 - graph-based,
-- self-editing bounded text-based.
+- pictorial-based.
 
-We also embed these three types of memory into an agent as sub-conscious processes, and assess how this agent performs compared to a commercial LLM when asked to solve a complex task.
+### Video
 
-### Concepts
-
-- An **agent** is an entity having the ability to think, memorize, and react to a conversation.
-- A **subconscious process** is a process running within an agent in charge of performing internal tasks such as memory access/update.
-- A **conversation** is a place where multiple agents talk with each other. Everyone in a conversation hears what everyone else is saying.
-
-### Recommended reading
-
-Very useful resources to get started [here](https://github.com/marcadella/memento/wiki/Literature#must-read).
+https://filedn.com/lIFJC8ES6odhW7qS8AxmmHY/memento.mp4
 
 ## Getting started
 
@@ -37,8 +29,7 @@ Very useful resources to get started [here](https://github.com/marcadella/mement
   - `CHATUIT_BASE_URL`
   - `CHATUIT_API_KEY`
 - Alternatively, start LM studio server and load whatever model. The expected URL is `http://127.0.0.1:1234/v1`.
-
-
+- 
 
 #### NEO4j set-up
 
