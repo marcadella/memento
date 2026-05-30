@@ -18,39 +18,83 @@ from datetime import datetime, timezone
 
 from generics.memory import MemoryLike
 from processes.GraphExtractionProcess import GraphExtractionProcess
+from processes.GraphLinkProcess import GraphLinkProcess
 from utilities.Message import Message
 from utilities.embeddings import embed_text
+
+
+# Deterministic backstop for the extraction prompt. Triples whose head
+# or tail (case-insensitive) lands in this set are dropped before they
+# reach Neo4j. The extractor is told to avoid these in the prompt, but
+# the LLM still leaks them occasionally; this catches every time.
+ENTITY_STOPWORDS: frozenset[str] = frozenset({
+    # short answers
+    "yes", "no", "yeah", "yep", "nope", "sure", "okay", "ok",
+    "maybe", "perhaps",
+    # greetings / farewells / thanks
+    "hi", "hello", "hey", "bye", "goodbye", "thanks", "thx",
+    # generic placeholders
+    "thing", "things", "stuff", "something", "anything", "nothing",
+    "someone", "anyone", "everyone",
+    # pronouns
+    "it", "this", "that", "these", "those",
+    "me", "you", "we", "us", "them", "him", "her", "they",
+    "he", "she", "i",
+    # agent-self labels
+    "assistant", "ai", "bot", "chatbot",
+})
 
 
 class GraphMemory(MemoryLike):
     """
     Per-agent graph memory backed by a Neo4j database."""
 
-    def __init__(self, name: str, client, model: str, driver):
+    def __init__(self, name: str, client, model: str, driver, extraction_client=None, extraction_model: str | None = None):
         """
         Args:
             name: Agent's name. Used as agent_id to namespace this memory's
                 data within the shared Neo4j database.
 
-            client: OpenAI or AzureOpenAI client (for embeddings and extraction).
-            model: Chat model name or Azure deployment name.
+            client: OpenAI or AzureOpenAI client. Used for embeddings (always)
+                and for extraction (unless extraction_client is provided).
+            model: Chat model name or Azure deployment name. Used as fallback
+                for extraction if extraction_model is not provided.
             driver: A connected Neo4j driver. Caller manages its lifecycle.
+            extraction_client: Optional. Separate client used only for triple
+                extraction. Lets you route extraction to a different provider
+                (e.g. standard OpenAI for access to gpt-4.1) while keeping
+                chat and embeddings on Azure. Defaults to `client`.
+            extraction_model: Optional. Model used for triple extraction.
+                Defaults to the chat model. Set to a stronger model
+                (e.g. 'gpt-4.1') to reduce noisy / meta extractions.
         """
         super().__init__()
 
         self.agent_id = name  #  The agent's identity. (Every node and relationship this memory writes carries this value)
-        self.client = client  #  OpenAI/Azure client
+        self.client = client  #  OpenAI/Azure client (used for embeddings + chat)
         self.driver = driver  #  Neo4j driver
 
-        
+
         self._current_message_id = None  #  Holds the id of the message currently being processed by put().
 
-        # The LLM-driven extraction process...
+        # The LLM-driven extraction process. Falls back to the chat
+        # client and model if no extraction-specific ones were passed.
         self.extraction_process = GraphExtractionProcess(
             process_name=f"{name}.graph_extraction",
-            client=client,
-            model=model,
+            client=extraction_client or client,
+            model=extraction_model or model,
             store_triple=self.store_triple
+        )
+
+        # The LLM-driven link-enrichment process. Runs in a background
+        # thread after each assistant reply to find inter-turn
+        # connections the per-message extractor missed. Uses the same
+        # client/model split as extraction.
+        self.link_process = GraphLinkProcess(
+            process_name=f"{name}.graph_link",
+            client=extraction_client or client,
+            model=extraction_model or model,
+            store_triple=self.store_triple,
         )
 
     # -------- write path --------
@@ -111,67 +155,129 @@ class GraphMemory(MemoryLike):
                 timestamp=timestamp,
             )
 
-    def store_triple(self, head: str, relation: str, tail: str):
+    def store_triple(self, head: str = "", relation: str = "", tail: str = "", source: str = "extractor"):
         """
-        Called by GraphExtractionProcess once per extracted triple.
+        Called by GraphExtractionProcess or GraphLinkProcess once per triple.
 
         MERGEs both entity nodes (deduplicating by (name, agent_id)) and
-        creates a :RELATES relationship between them. Provenance is
-        recorded via source_message_id pointing at the current :Message.
+        creates a :RELATES relationship between them. For extractor calls,
+        also writes (:Message)-[:MENTIONS]->(:Entity) edges and tags the
+        :RELATES with the source_message_id of the current message. For
+        linker calls, :MENTIONS is skipped (a link inferred across turns
+        has no single source message) and source_message_id is null.
+
+        Args:
+            head: Subject entity.
+            relation: Relation type (LLM-chosen label).
+            tail: Object entity.
+            source: 'extractor' (default) or 'linker'. Tags the :RELATES
+                edge so origin can be queried.
+
+        Args default to "" so a malformed LLM tool call with missing
+        arguments no-ops via the stopword filter instead of raising
+        TypeError. Required args are still required for correct use.
         """
 
-        # Defensive check: this method should only run during put(). If it gets called any other way, something is wired wrong.
-        if self._current_message_id is None:
+        # Extractor MUST run inside put(); linker has no anchor message.
+        if source == "extractor" and self._current_message_id is None:
             raise RuntimeError(
-                "store_triple called outside of put(). Extraction should only run via the put() pipeline."
+                "store_triple called outside of put(). Extractor must run via the put() pipeline."
             )
+
+        # Deterministic noise filter: drop triples whose head or tail is
+        # a stopword, the agent's own name, or empty. Prompt rules cover
+        # this but the LLM ignores them sometimes.
+        h_norm = head.strip().lower()
+        t_norm = tail.strip().lower()
+        if not h_norm or not t_norm:
+            return
+        if h_norm in ENTITY_STOPWORDS or t_norm in ENTITY_STOPWORDS:
+            return
+        if h_norm == self.agent_id.lower() or t_norm == self.agent_id.lower():
+            return
+
+        # Linker dedup: skip if any :RELATES with the same
+        # (head, relation, tail) already exists for this agent. The
+        # extractor intentionally uses CREATE to preserve mention
+        # frequency (locked decision #4), but a linker re-emitting the
+        # same inference is noise, not signal. Check before doing any
+        # work (including embeddings) so duplicates are cheap.
+        if source == "linker":
+            with self.driver.session() as session:
+                existing = session.run(
+                    """
+                    MATCH (h:Entity {name: $head, agent_id: $agent_id})
+                          -[r:RELATES {type: $relation, agent_id: $agent_id}]->
+                          (t:Entity {name: $tail, agent_id: $agent_id})
+                    RETURN r LIMIT 1
+                    """,
+                    head=head,
+                    tail=tail,
+                    relation=relation,
+                    agent_id=self.agent_id,
+                ).single()
+                if existing:
+                    return
 
         # Embed both entities so they are vector-searchable later.
         head_embedding = embed_text(self.client, head)
         tail_embedding = embed_text(self.client, tail)
 
-        # Single transaction: MERGE both entities and CREATE the relation.
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        # MERGE entities + CREATE :RELATES. The `source` property tags
+        # the edge so extractor vs linker edges can be told apart in
+        # queries. source_message_id is null for linker edges.
+        base_query = """
+            MERGE (h:Entity {name: $head, agent_id: $agent_id})
+            ON CREATE SET h.embedding = $head_embedding,
+                          h.aliases = [],
+                          h.first_seen = $timestamp,
+                          h.mention_count = 1
+            ON MATCH SET h.mention_count = h.mention_count + 1
+
+            MERGE (t:Entity {name: $tail, agent_id: $agent_id})
+            ON CREATE SET t.embedding = $tail_embedding,
+                          t.aliases = [],
+                          t.first_seen = $timestamp,
+                          t.mention_count = 1
+            ON MATCH SET t.mention_count = t.mention_count + 1
+
+            CREATE (h)-[r:RELATES {
+                type: $relation,
+                agent_id: $agent_id,
+                source_message_id: $message_id,
+                created_at: $timestamp,
+                source: $source
+            }]->(t)
+        """
+
+        # Extractor calls also link the source message to both entities.
+        # Linker edges are cross-turn inferences with no single source
+        # message, so :MENTIONS is skipped for them.
+        mentions_query = """
+            WITH h, t
+            MATCH (m:Message {id: $message_id, agent_id: $agent_id})
+            MERGE (m)-[mh:MENTIONS]->(h)
+            ON CREATE SET mh.agent_id = $agent_id
+            MERGE (m)-[mt:MENTIONS]->(t)
+            ON CREATE SET mt.agent_id = $agent_id
+        """
+
+        query = base_query + mentions_query if source == "extractor" else base_query
+
         with self.driver.session() as session:
             session.run(
-                """
-                // Find-or-create the head entity. ON CREATE runs only
-                // when the node is new; ON MATCH runs only when it
-                // already existed. This avoids re-embedding entities
-                // we have seen before.
-                MERGE (h:Entity {name: $head, agent_id: $agent_id})
-                ON CREATE SET h.embedding = $head_embedding,
-                              h.aliases = [],
-                              h.first_seen = $timestamp,
-                              h.mention_count = 1
-                ON MATCH SET h.mention_count = h.mention_count + 1
-
-                // Same pattern for the tail entity.
-                MERGE (t:Entity {name: $tail, agent_id: $agent_id})
-                ON CREATE SET t.embedding = $tail_embedding,
-                              t.aliases = [],
-                              t.first_seen = $timestamp,
-                              t.mention_count = 1
-                ON MATCH SET t.mention_count = t.mention_count + 1
-
-                // CREATE (not MERGE) so the same fact heard twice
-                // becomes two relationships with separate provenance.
-                // This preserves "how often was this mentioned" and
-                // lets us trace each claim back to its source message.
-                CREATE (h)-[r:RELATES {
-                    type: $relation,
-                    agent_id: $agent_id,
-                    source_message_id: $message_id,
-                    created_at: $timestamp
-                }]->(t)
-                """,
+                query,
                 head=head,
                 tail=tail,
                 head_embedding=head_embedding,
                 tail_embedding=tail_embedding,
                 relation=relation,
                 agent_id=self.agent_id,
-                message_id=self._current_message_id,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                message_id=self._current_message_id,  # None for linker
+                timestamp=timestamp,
+                source=source,
             )
 
     # -------- read path --------
@@ -253,7 +359,61 @@ class GraphMemory(MemoryLike):
                 results.append(f"{record['speaker']} said: {record['content']}")
 
         return results
-    
+
+    # -------- subconscious link enrichment --------
+
+    def link(self, recent_messages: list[Message]):
+        """Run the subconscious link-enrichment pass.
+
+        Intended to be invoked in a background thread after each
+        assistant reply. Pulls the entities that the recent stored
+        messages touched (via :MENTIONS edges) and asks the link
+        process to find inter-turn connections the per-message
+        extractor missed.
+
+        Background-thread friendly: any exception is caught and
+        printed rather than re-raised, because uncaught thread
+        exceptions disappear silently.
+
+        Args:
+            recent_messages: Snapshot of recent flash-memory messages,
+                used only to render the prompt. The entity list comes
+                from Neo4j, not from the messages directly.
+        """
+        try:
+            if not recent_messages:
+                return
+
+            # Pull entities touched by the most recent N stored messages
+            # for this agent. N matches the size of the snapshot so the
+            # entity list aligns with the message window the LLM sees.
+            n = len(recent_messages)
+            with self.driver.session() as session:
+                result = session.run(
+                    """
+                    MATCH (m:Message {agent_id: $agent_id})
+                    WITH m ORDER BY m.timestamp DESC LIMIT $n
+                    MATCH (m)-[:MENTIONS]->(e:Entity)
+                    RETURN DISTINCT e.name AS name
+                    """,
+                    agent_id=self.agent_id,
+                    n=n,
+                )
+                entities = [r["name"] for r in result]
+
+            if not entities:
+                return  # nothing was extracted yet, nothing to link
+
+            entities_str = ", ".join(entities)
+            messages_str = "\n".join(
+                f"{m.name or m.role.upper()}: {m.content}"
+                for m in recent_messages
+            )
+
+            self.link_process.apply((entities_str, messages_str))
+        except Exception as e:
+            print(f"[link] error: {e}")
+
     def get_retrieve_tooling(self) -> dict:
         """Expose graph retrieval as an LLM tool.
 
