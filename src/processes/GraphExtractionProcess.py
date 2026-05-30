@@ -72,17 +72,24 @@ class GraphExtractionProcess(ProcessLike):
         }
         self.functions.append(store_triple_api)
 
-    def messages(self, context: str) -> list[Message]:
+    def messages(self, data) -> list[Message]:
         """
         Build the prompt for triple extraction.
 
         Args:
-            context: The text to extract triples from.
+            data: Either a (speaker, content) tuple, or a plain string
+                content (legacy / single-speaker callers). When only a
+                string is given, the speaker defaults to 'user' to
+                preserve the old single-human behavior.
 
         Returns:
-            A list with a single system message containing instructions
-            and the input text.
-
+            A list with a single system message containing instructions,
+            the speaker label, and the input text.
         """
+        if isinstance(data, tuple):
+            speaker, content = data
+        else:
+            speaker, content = "user", data
+        speaker = speaker or "user"
 
-        return [Message(role="system", content=self.prompt_template.format(context=context))]
+        return [Message(role="system", content=self.prompt_template.format(speaker=speaker, context=content))]

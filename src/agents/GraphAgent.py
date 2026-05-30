@@ -27,7 +27,7 @@ class GraphAgent(AgentLike):
           decide to call the retrieval tool, which queries GraphMemory.
     """
 
-    def __init__(self, name: str, client, driver, model="gpt-4.1-mini", extraction_client=None, extraction_model: str | None = None, verbose=False, flash_memory_size=10000):
+    def __init__(self, name: str, client, driver, model="gpt-4.1-mini", extraction_client=None, extraction_model: str | None = None, verbose=False, flash_memory_size=10000, linker_window_chars: int = 3000):
         """
         Args:
             name: Agent's name. Used as agent_id in the graph.
@@ -42,13 +42,18 @@ class GraphAgent(AgentLike):
                 Defaults to the chat model. Set to a stronger model
                 (e.g. 'gpt-4.1') to reduce noisy / meta extractions.
             verbose: Verbose flag passed to AgentLike.
-            flash_memory_size: Char budget for the rolling flash memory.
+            flash_memory_size: Char budget for the rolling flash memory
+                (drives chat-react context). Default 10000.
+            linker_window_chars: Char budget for the slice of flash
+                handed to the subconscious linker. Decoupled from
+                flash_memory_size so the linker can stay focused while
+                chat keeps a wider context. Default 3000.
         """
         super().__init__(name, verbose)
 
         # Long-term memory backed by Neo4j. Owns its own extraction
         # process internally.
-        self.graph_memory = GraphMemory(name=name, client=client, model=model, driver=driver, extraction_client=extraction_client, extraction_model=extraction_model)
+        self.graph_memory = GraphMemory(name=name, client=client, model=model, driver=driver, extraction_client=extraction_client, extraction_model=extraction_model, linker_window_chars=linker_window_chars)
 
         # Short-term rolling context. Same pattern as BaseAgent.
         self.flash_memory = FlashMemory(flash_memory_size)
@@ -67,6 +72,7 @@ class GraphAgent(AgentLike):
         # Commands available via the interactive CLI (>agent_name.command).
         self.registered_commands = {
             "flash": "Print the flash memory contents.",
+            "retrieve": "Query the graph memory and print the retrieved facts.",
             "tokens": "Print token usage."
         }
 
@@ -115,6 +121,17 @@ class GraphAgent(AgentLike):
     def flash(self) -> str:
         """Return the flash memory contents as a string. CLI helper."""
         return "\n".join([m.to_string() for m in self.flash_memory.get()])
+
+
+    def retrieve(self, query: str = "") -> str:
+        """Query the graph memory and return retrieved facts as text.
+
+        Pure memory recall: hits GraphMemory.get() and joins the
+        result. No chat-model wrapping, no react step. Used by the
+        evaluation harness so scoring measures memory quality, not
+        chat phrasing. Mirrors RAGAgent.retrieve().
+        """
+        return "\n".join(self.graph_memory.get(query))
 
 
     def tokens(self, last_n=0) -> str:

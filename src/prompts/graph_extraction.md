@@ -17,7 +17,10 @@ Empty output is the right answer for most messages.
   Never use sentence fragments, descriptive phrases, full
   clauses, pronouns, or pleasantries as head or tail.
 - When the subject is the speaker (uses 'I', 'me', 'my'),
-  use the literal string 'user' as the head.
+  use the SPEAKER'S NAME (shown in the "Speaker" block below)
+  as the head. NEVER use the literal word 'user' or generic
+  pronouns. Each speaker has their own identity and their
+  facts must be attributed to them by name.
 - Do NOT extract from questions.
 - Do NOT extract opinions, feelings, hedges, or speculation.
 - Do NOT extract greetings, acknowledgements, farewells,
@@ -33,10 +36,10 @@ Empty output is the right answer for most messages.
   conversation, extract NOTHING. The facts were already
   stored when they were originally said; re-extracting them
   from a recap creates duplicates and meta-noise.
-- Extract entity-to-entity facts, not just user-to-entity.
-  When a single message mentions multiple non-user entities,
+- Extract entity-to-entity facts, not just speaker-to-entity.
+  When a single message mentions multiple non-speaker entities,
   capture how THEY relate (location, topic, member_of, part_of,
-  made_of, etc.), not only how the user relates to each one.
+  made_of, etc.), not only how the speaker relates to each one.
 - Prefer the SPECIFIC entity over the generic category.
   If a message mentions both a specific thing and its umbrella
   category ('a conference, which is an event'), store only the
@@ -48,58 +51,74 @@ Empty output is the right answer for most messages.
 
 # Examples
 
-Input: 'Marcus moved to Tromso last month and started a job at Anthropic.'
+Speaker: Marcus
+Message: 'Marcus moved to Tromso last month and started a job at Anthropic.'
 Calls:
   store_triple(head='Marcus', relation='moved_to', tail='Tromso')
   store_triple(head='Marcus', relation='works_at', tail='Anthropic')
 
-Input: 'How are you doing today?'
+Speaker: Anna
+Message: 'How are you doing today?'
 Calls: (none, question)
 
-Input: 'Hi! Nice to see you again.'
+Speaker: Anna
+Message: 'Hi! Nice to see you again.'
 Calls: (none, greeting)
 
-Input: 'My favorite Norwegian dish is fiskeboller. I learned to make them from my grandmother.'
+Speaker: Anna
+Message: 'My favorite Norwegian dish is fiskeboller. I learned to make them from my grandmother.'
 Calls:
-  store_triple(head='user', relation='favorite_dish', tail='fiskeboller')
-  store_triple(head='user', relation='learned_from', tail='grandmother')
+  store_triple(head='Anna', relation='favorite_dish', tail='fiskeboller')
+  store_triple(head='Anna', relation='learned_from', tail='grandmother')
 
-Input: 'I think Norwegian winters are too dark.'
+Speaker: David
+Message: 'I think Norwegian winters are too dark.'
 Calls: (none, opinion)
 
-Input: 'Yesterday, we met and you introduced yourself as John. We touched on your interest in football.'
+Speaker: David
+Message: 'Yesterday, we met and you introduced yourself as John. We touched on your interest in football.'
 Calls: (none, recap of past conversation)
 
-Input: 'Real Madrid won the Champions League in 2024.'
+Speaker: Sara
+Message: 'Real Madrid won the Champions League in 2024.'
 Calls:
   store_triple(head='Real Madrid', relation='won', tail='Champions League')
 
-Input: 'I went to a Space Physics conference in Tromsø last week.'
+Speaker: David
+Message: 'I went to a Space Physics conference in Tromsø last week.'
 Calls:
-  store_triple(head='user', relation='attended', tail='conference')
+  store_triple(head='David', relation='attended', tail='conference')
   store_triple(head='conference', relation='topic', tail='Space Physics')
   store_triple(head='conference', relation='location', tail='Tromsø')
 
-Input: 'My brother Marcus works at Anthropic in San Francisco.'
+Speaker: Anna
+Message: 'My brother Marcus works at Anthropic in San Francisco.'
 Calls:
-  store_triple(head='user', relation='brother', tail='Marcus')
+  store_triple(head='Anna', relation='brother', tail='Marcus')
   store_triple(head='Marcus', relation='works_at', tail='Anthropic')
   store_triple(head='Anthropic', relation='location', tail='San Francisco')
 
-Input: 'I attended a great event yesterday, a Space Physics conference.'
+Speaker: David
+Message: 'I attended a great event yesterday, a Space Physics conference.'
 Calls:
-  store_triple(head='user', relation='attended', tail='conference')
+  store_triple(head='David', relation='attended', tail='conference')
   store_triple(head='conference', relation='topic', tail='Space Physics')
   (no 'event' node; it is the generic umbrella for 'conference')
 
-Input: 'You are such a helpful assistant!'
+Speaker: Sara
+Message: 'You are such a helpful assistant!'
 Calls: (none, pleasantry about the agent itself)
 
-Input: 'Yes'
+Speaker: Marcus
+Message: 'Yes'
 Calls: (none, short answer with no fact on its own)
 
-Input: 'Sure, I do.'
+Speaker: Anna
+Message: 'Sure, I do.'
 Calls: (none, agreement without standalone content)
+
+# Speaker
+The message below was said by: {speaker}
 
 # Message to process
 '{context}'
