@@ -215,3 +215,7 @@ __marimo__/
 output/
 dataset/
 test.py
+
+# Local-only handoff and Claude Code config
+HANDOFF.md
+CLAUDE.md
