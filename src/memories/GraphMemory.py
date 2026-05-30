@@ -22,34 +22,66 @@ from utilities.Message import Message
 from utilities.embeddings import embed_text
 
 
+# Deterministic backstop for the extraction prompt. Triples whose head
+# or tail (case-insensitive) lands in this set are dropped before they
+# reach Neo4j. The extractor is told to avoid these in the prompt, but
+# the LLM still leaks them occasionally; this catches every time.
+ENTITY_STOPWORDS: frozenset[str] = frozenset({
+    # short answers
+    "yes", "no", "yeah", "yep", "nope", "sure", "okay", "ok",
+    "maybe", "perhaps",
+    # greetings / farewells / thanks
+    "hi", "hello", "hey", "bye", "goodbye", "thanks", "thx",
+    # generic placeholders
+    "thing", "things", "stuff", "something", "anything", "nothing",
+    "someone", "anyone", "everyone",
+    # pronouns
+    "it", "this", "that", "these", "those",
+    "me", "you", "we", "us", "them", "him", "her", "they",
+    "he", "she", "i",
+    # agent-self labels
+    "assistant", "ai", "bot", "chatbot",
+})
+
+
 class GraphMemory(MemoryLike):
     """
     Per-agent graph memory backed by a Neo4j database."""
 
-    def __init__(self, name: str, client, model: str, driver):
+    def __init__(self, name: str, client, model: str, driver, extraction_client=None, extraction_model: str | None = None):
         """
         Args:
             name: Agent's name. Used as agent_id to namespace this memory's
                 data within the shared Neo4j database.
 
-            client: OpenAI or AzureOpenAI client (for embeddings and extraction).
-            model: Chat model name or Azure deployment name.
+            client: OpenAI or AzureOpenAI client. Used for embeddings (always)
+                and for extraction (unless extraction_client is provided).
+            model: Chat model name or Azure deployment name. Used as fallback
+                for extraction if extraction_model is not provided.
             driver: A connected Neo4j driver. Caller manages its lifecycle.
+            extraction_client: Optional. Separate client used only for triple
+                extraction. Lets you route extraction to a different provider
+                (e.g. standard OpenAI for access to gpt-4.1) while keeping
+                chat and embeddings on Azure. Defaults to `client`.
+            extraction_model: Optional. Model used for triple extraction.
+                Defaults to the chat model. Set to a stronger model
+                (e.g. 'gpt-4.1') to reduce noisy / meta extractions.
         """
         super().__init__()
 
         self.agent_id = name  #  The agent's identity. (Every node and relationship this memory writes carries this value)
-        self.client = client  #  OpenAI/Azure client
+        self.client = client  #  OpenAI/Azure client (used for embeddings + chat)
         self.driver = driver  #  Neo4j driver
 
-        
+
         self._current_message_id = None  #  Holds the id of the message currently being processed by put().
 
-        # The LLM-driven extraction process...
+        # The LLM-driven extraction process. Falls back to the chat
+        # client and model if no extraction-specific ones were passed.
         self.extraction_process = GraphExtractionProcess(
             process_name=f"{name}.graph_extraction",
-            client=client,
-            model=model,
+            client=extraction_client or client,
+            model=extraction_model or model,
             store_triple=self.store_triple
         )
 
@@ -111,13 +143,17 @@ class GraphMemory(MemoryLike):
                 timestamp=timestamp,
             )
 
-    def store_triple(self, head: str, relation: str, tail: str):
+    def store_triple(self, head: str = "", relation: str = "", tail: str = ""):
         """
         Called by GraphExtractionProcess once per extracted triple.
 
         MERGEs both entity nodes (deduplicating by (name, agent_id)) and
         creates a :RELATES relationship between them. Provenance is
         recorded via source_message_id pointing at the current :Message.
+
+        Args default to "" so a malformed LLM tool call with missing
+        arguments no-ops via the stopword filter instead of raising
+        TypeError. Required args are still required for correct use.
         """
 
         # Defensive check: this method should only run during put(). If it gets called any other way, something is wired wrong.
@@ -125,6 +161,18 @@ class GraphMemory(MemoryLike):
             raise RuntimeError(
                 "store_triple called outside of put(). Extraction should only run via the put() pipeline."
             )
+
+        # Deterministic noise filter: drop triples whose head or tail is
+        # a stopword, the agent's own name, or empty. Prompt rules cover
+        # this but the LLM ignores them sometimes.
+        h_norm = head.strip().lower()
+        t_norm = tail.strip().lower()
+        if not h_norm or not t_norm:
+            return
+        if h_norm in ENTITY_STOPWORDS or t_norm in ENTITY_STOPWORDS:
+            return
+        if h_norm == self.agent_id.lower() or t_norm == self.agent_id.lower():
+            return
 
         # Embed both entities so they are vector-searchable later.
         head_embedding = embed_text(self.client, head)
@@ -163,6 +211,20 @@ class GraphMemory(MemoryLike):
                     source_message_id: $message_id,
                     created_at: $timestamp
                 }]->(t)
+
+                // Link the source message to the entities it mentioned.
+                // MERGE so the same entity mentioned twice in one
+                // message does not create duplicate :MENTIONS edges.
+                // Complements the source_message_id property on :RELATES:
+                // that property answers "which message produced this
+                // exact fact"; :MENTIONS answers "which entities did
+                // this message touch."
+                WITH h, t
+                MATCH (m:Message {id: $message_id, agent_id: $agent_id})
+                MERGE (m)-[mh:MENTIONS]->(h)
+                ON CREATE SET mh.agent_id = $agent_id
+                MERGE (m)-[mt:MENTIONS]->(t)
+                ON CREATE SET mt.agent_id = $agent_id
                 """,
                 head=head,
                 tail=tail,

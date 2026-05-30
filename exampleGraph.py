@@ -14,7 +14,7 @@ wipe it.
 import argparse
 import os
 
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 
 from agents.GraphAgent import GraphAgent
 from agents.HumanAgent import HumanAgent
@@ -24,7 +24,7 @@ from graph.connection import make_driver
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Example conversation with a graph-memory agent.")
-    parser.add_argument("--name", "-n", type=str, default="exampleGraph", help="Conversation name.")
+    parser.add_argument("--name", "-n", type=str, default=None, help="Conversation name. Defaults to a fresh timestamped session each run, so the YAML tape is not replayed. Pass an existing name (or 'latest') to resume.")
     parser.add_argument("--enact", action="store_true", help="Re-enact the conversation history.")
     parser.add_argument("--override", "-x", action="store_true", help="Override an existing conversation.")
     args = parser.parse_args()
@@ -35,13 +35,31 @@ def main() -> None:
         api_version="2024-02-15-preview",
     )
 
+    # Optional: route extraction to standard OpenAI for access to a
+    # stronger model (gpt-4.1). Chat and embeddings stay on Azure.
+    # If OPENAI_API_KEY is not set, extraction falls back to the chat
+    # client/model.
+    extraction_client = None
+    extraction_model = None
+    if os.environ.get("OPENAI_API_KEY"):
+        extraction_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        extraction_model = "gpt-4.1"
+
     driver = make_driver()
     try:
-        agent = GraphAgent(name="A", client=client, driver=driver, model="gpt-4.1-mini")
+        agent = GraphAgent(
+            name="A",
+            client=client,
+            driver=driver,
+            model="gpt-4.1-mini",
+            extraction_client=extraction_client,
+            extraction_model=extraction_model,
+        )
         human = HumanAgent("H")
         conv = SingleAgentConversation(
             agent=agent,
             human_agent=human,
+            output_dir="output/exampleGraph",
             conversation_name=args.name,
             override=args.override,
         )

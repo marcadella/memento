@@ -25,13 +25,20 @@ class GraphAgent(AgentLike):
           decide to call the retrieval tool, which queries GraphMemory.
     """
 
-    def __init__(self, name: str, client, driver, model="gpt-4.1-mini", verbose=False, flash_memory_size=10000):
+    def __init__(self, name: str, client, driver, model="gpt-4.1-mini", extraction_client=None, extraction_model: str | None = None, verbose=False, flash_memory_size=10000):
         """
         Args:
             name: Agent's name. Used as agent_id in the graph.
-            client: OpenAI / AzureOpenAI client.
+            client: OpenAI / AzureOpenAI client. Used for chat and embeddings.
             driver: Connected Neo4j driver. Caller manages its lifecycle.
             model: Chat model name or Azure deployment name.
+            extraction_client: Optional. Separate client used only for
+                extraction. Lets you route extraction to a different
+                provider (e.g. standard OpenAI for gpt-4.1) while keeping
+                chat and embeddings on Azure. Defaults to `client`.
+            extraction_model: Optional. Model used for triple extraction.
+                Defaults to the chat model. Set to a stronger model
+                (e.g. 'gpt-4.1') to reduce noisy / meta extractions.
             verbose: Verbose flag passed to AgentLike.
             flash_memory_size: Char budget for the rolling flash memory.
         """
@@ -39,7 +46,7 @@ class GraphAgent(AgentLike):
 
         # Long-term memory backed by Neo4j. Owns its own extraction
         # process internally.
-        self.graph_memory = GraphMemory(name=name, client=client, model=model, driver=driver)
+        self.graph_memory = GraphMemory(name=name, client=client, model=model, driver=driver, extraction_client=extraction_client, extraction_model=extraction_model)
 
         # Short-term rolling context. Same pattern as BaseAgent.
         self.flash_memory = FlashMemory(flash_memory_size)
@@ -75,8 +82,11 @@ class GraphAgent(AgentLike):
     def hear(self, speaker_name: str, content: str):
         """Process an incoming message.
 
-        Writes to both memories: flash for immediate context, graph for
-        long-term recall.
+        Writes to flash for immediate context. Writes to graph memory
+        only for messages from others, never the agent's own replies:
+        replies are elaboration on what was already heard, and feeding
+        them back into extraction produces meta-noise (recaps,
+        rephrasings) without adding durable facts.
         """
         role = "assistant" if speaker_name == self.name else "user"
         message = Message(role=role, content=content, name=speaker_name)
@@ -84,8 +94,9 @@ class GraphAgent(AgentLike):
         # Recent context for the react process.
         self.flash_memory.put(message)
 
-        # Long-term graph memory. Extraction happens inside put().
-        self.graph_memory.put(message)
+        # Long-term graph memory. Skip the agent's own utterances.
+        if role != "assistant":
+            self.graph_memory.put(message)
 
 
     def flash(self) -> str:
