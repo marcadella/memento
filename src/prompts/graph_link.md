@@ -28,6 +28,19 @@ Another is implicit references resolved across turns:
   but missed Anthropic → location → San Francisco because turn 3
   was an isolated noun phrase.
 
+# How to act
+
+CRITICAL: The ONLY way to record a triple is to invoke the
+store_triple TOOL via the tool-calling interface. Writing the
+function call as plain text in your response (for example
+"store_triple(head='X', relation='Y', tail='Z')" or
+"functions.store_triple(...)") is NOT a tool call and will be
+silently ignored. The examples below use plain text for
+illustration only — in your actual response you must invoke
+the tool, not describe it.
+
+If there is nothing to add, produce no tool calls and no text.
+
 # Rules (strict)
 
 - Add ONLY connections that REQUIRE multiple turns to see. Do not

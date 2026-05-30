@@ -13,6 +13,7 @@ get() is not implemented yet. Retrieval will land in a separate branch.
 """
 
 
+import sys
 import uuid
 from datetime import datetime, timezone
 
@@ -49,7 +50,7 @@ class GraphMemory(MemoryLike):
     """
     Per-agent graph memory backed by a Neo4j database."""
 
-    def __init__(self, name: str, client, model: str, driver, extraction_client=None, extraction_model: str | None = None):
+    def __init__(self, name: str, client, model: str, driver, extraction_client=None, extraction_model: str | None = None, linker_window_chars: int = 3000):
         """
         Args:
             name: Agent's name. Used as agent_id to namespace this memory's
@@ -67,12 +68,18 @@ class GraphMemory(MemoryLike):
             extraction_model: Optional. Model used for triple extraction.
                 Defaults to the chat model. Set to a stronger model
                 (e.g. 'gpt-4.1') to reduce noisy / meta extractions.
+            linker_window_chars: Char budget for the slice of recent
+                messages handed to the linker. Smaller = more focused
+                linker (fewer entities, less noise) but misses links
+                spanning further back. Decoupled from flash_memory_size
+                so the chat react path can keep a wider context.
         """
         super().__init__()
 
         self.agent_id = name  #  The agent's identity. (Every node and relationship this memory writes carries this value)
         self.client = client  #  OpenAI/Azure client (used for embeddings + chat)
         self.driver = driver  #  Neo4j driver
+        self.linker_window_chars = linker_window_chars
 
 
         self._current_message_id = None  #  Holds the id of the message currently being processed by put().
@@ -115,10 +122,15 @@ class GraphMemory(MemoryLike):
         self._current_message_id = message_id
 
         # Write the :Message node to Neo4j (with embedding, speaker, etc.).
-        self._store_message(message_id=message_id, speaker=data.name or "unknown", content=data.content)
+        speaker = data.name or "user"
+        self._store_message(message_id=message_id, speaker=speaker, content=data.content)
 
-        
-        self.extraction_process.apply(data.content)  # Run the extractor...
+
+        # Pass speaker to extraction so first-person facts get
+        # attributed to the actual speaker by name, not to a shared
+        # 'user' entity. Critical for multi-speaker conversations
+        # (e.g. LoCoMo eval where two humans both say 'I').
+        self.extraction_process.apply((speaker, data.content))
         self._current_message_id = None  # Reset so any accidental call to store_triple outside of put() raises an error
 
 
@@ -384,8 +396,22 @@ class GraphMemory(MemoryLike):
             if not recent_messages:
                 return
 
+            # Tighten to the linker window: walk backwards from the most
+            # recent message, accumulate chars, stop when the budget is
+            # full. Keeps the LLM call focused (fewer entities, less
+            # noise) without forcing chat to share the same small window.
+            windowed = []
+            total_chars = 0
+            for m in reversed(recent_messages):
+                size = len(m.content) + len(m.name or "")
+                if windowed and total_chars + size > self.linker_window_chars:
+                    break
+                windowed.insert(0, m)
+                total_chars += size
+            recent_messages = windowed
+
             # Pull entities touched by the most recent N stored messages
-            # for this agent. N matches the size of the snapshot so the
+            # for this agent. N matches the (windowed) snapshot so the
             # entity list aligns with the message window the LLM sees.
             n = len(recent_messages)
             with self.driver.session() as session:
@@ -412,7 +438,9 @@ class GraphMemory(MemoryLike):
 
             self.link_process.apply((entities_str, messages_str))
         except Exception as e:
-            print(f"[link] error: {e}")
+            # stderr so errors survive stdout-redirect contexts (e.g.,
+            # the eval harness silences stdout during ingestion).
+            print(f"[link] error: {e}", file=sys.stderr)
 
     def get_retrieve_tooling(self) -> dict:
         """Expose graph retrieval as an LLM tool.
