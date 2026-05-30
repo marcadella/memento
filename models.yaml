@@ -5,3 +5,4 @@
 - "Llama-4-Maverick-17B-128E-Instruct-FP8" # Struggles to understand who is who
 - "DeepSeek-V3.2" # Seems smart, but super slow!
 - "gpt-4.1-mini" # Seems smarter than the others
+- "gpt-4.1" # Currently the smartest model 

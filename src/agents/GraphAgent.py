@@ -5,6 +5,8 @@ recent conversational context, and a GraphReactProcess that gives the
 LLM a tool to query the graph on demand.
 """
 
+import threading
+
 from generics.agent import AgentLike
 from memories.FlashMemory import FlashMemory
 from memories.GraphMemory import GraphMemory
@@ -82,11 +84,12 @@ class GraphAgent(AgentLike):
     def hear(self, speaker_name: str, content: str):
         """Process an incoming message.
 
-        Writes to flash for immediate context. Writes to graph memory
-        only for messages from others, never the agent's own replies:
-        replies are elaboration on what was already heard, and feeding
-        them back into extraction produces meta-noise (recaps,
-        rephrasings) without adding durable facts.
+        Writes to flash for immediate context. For others' messages,
+        runs sync graph extraction. For the agent's own replies, spawns
+        a background "subconscious" link-enrichment pass instead — the
+        per-message extractor never runs on the agent's own utterances,
+        but the linker uses the recent turn window to find cross-turn
+        connections (e.g. linking an answer to its prior question).
         """
         role = "assistant" if speaker_name == self.name else "user"
         message = Message(role=role, content=content, name=speaker_name)
@@ -94,9 +97,19 @@ class GraphAgent(AgentLike):
         # Recent context for the react process.
         self.flash_memory.put(message)
 
-        # Long-term graph memory. Skip the agent's own utterances.
         if role != "assistant":
+            # Sync extraction on what was said to the agent.
             self.graph_memory.put(message)
+        else:
+            # Fire-and-forget subconscious enrichment. Snapshot the
+            # flash window now so the thread sees a stable view, even
+            # if the user types again before the linker finishes.
+            recent = list(self.flash_memory.get())
+            threading.Thread(
+                target=self.graph_memory.link,
+                args=(recent,),
+                daemon=True,
+            ).start()
 
 
     def flash(self) -> str:
