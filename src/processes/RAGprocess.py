@@ -1,12 +1,11 @@
-from asyncio.windows_events import NULL
 
 from generics.process import ProcessLike
-from pydantic import InstanceOf
 from utilities.Message import Message
 from utilities.Context import ctx
 import json
 from dataclasses import asdict
 
+from utilities.prune_context import prune_context
 
 #to stop circular imports while still using type hints
 from typing import TYPE_CHECKING
@@ -84,11 +83,9 @@ class RAGStoreProcess(ProcessLike):
             print("wrong datatype given to messages")
 
         return context
-    
-        
-        
+
 class RAGRetrieveProcess(ProcessLike):
-    def __init__(self, name, client, model, retrieve_RAG_data):
+    def __init__(self, name, client, model, retrieve_RAG_data, memory: RAGMemory | None=None, max_char_context: int=100000):
         super().__init__(name, client, model)
         
         retrieve_RAG_data_API = {
@@ -113,6 +110,9 @@ class RAGRetrieveProcess(ProcessLike):
                 
         self.functions.append(retrieve_RAG_data_API)
         
+        self.memory = memory
+
+        self.max_char_context = max_char_context
         
     def messages(self, data):
         """
@@ -160,6 +160,8 @@ class RAGRetrieveProcess(ProcessLike):
         #print(ctx.current_path())
         #print(self.messages(context))
 
+        def get_total_chars(msgs):
+            return sum(len(str(m.get("content") or "")) for m in msgs)
 
         messages = [asdict(m) for m in self.messages(data)]
 
@@ -167,23 +169,58 @@ class RAGRetrieveProcess(ProcessLike):
 
         #max 10 toolcalls
         for _ in range(10):
-                
+            
+            try:
+                if self.memory != None:
+                    messages = prune_context(messages, max_chars=int(self.max_char_context/2), save_to_longterm=self.memory.put)
+                else:
+                    messages = prune_context(messages, max_chars=int(self.max_char_context/2))
+            except Exception as e:
+                print(e)
+                return ""
+
+            #naive token limiter
+            allowed_output_tokens = int((self.max_char_context - get_total_chars(messages))/ 4)
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                tools=self.functions
+                tools=self.functions,
+                max_completion_tokens=allowed_output_tokens
             )
             self.usages.append(response.usage)
             response = response.choices[0]
 
+            message = response.message
 
             #so it can remember what it said
             if response.message.content:
-                messages.append({"role": "assistant",
-                            "content": response.message.content})
+                # Check if the last message is an assistant message and fuse them
+                if messages and messages[-1]['role'] == 'assistant':
+                    messages[-1]['content'] += f"\n{response.message.content}"
+                else:
+                    messages.append({
+                        'role': 'assistant', 
+                        'content': response.message.content
+                    })
+
 
 
             if response.message.tool_calls is not None:
+                messages.append({
+                    "role": "assistant",
+                    "content": message.content,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": tc.type,
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments
+                            }
+                        } for tc in message.tool_calls
+                    ]
+                })
                 for tool_call in response.message.tool_calls:
                     function = tool_call.function
                     fn = getattr(self, function.name)
@@ -191,20 +228,23 @@ class RAGRetrieveProcess(ProcessLike):
                     result = fn(**json.loads(function.arguments))
 
                     # To add the return value of the toolcall
-                    messages.append({"role": "user",
+                    messages.append({"role": "tool",
                                      "tool_call_id": tool_call.id,
                                      "content": str(result)})
                     
-
-
             if response.finish_reason == "stop":
                 return_value = response.message.content
                 #if no toolcall
                 break
 
-            
+        else:
+            #will only run if forloop exits by iterating through everything
+            print("error to many itterations in apply")
 
         ctx.pop()
+
+        return_value = messages[-1]["content"]
+
 
         return return_value
 
@@ -218,7 +258,6 @@ class RAGProcess(ProcessLike):
     def __init__(self, name, client, model, RAG_memory: RAGMemory):
         super().__init__(name, client, model)
         
-
 
         self.rag_memory = RAG_memory
         store = self.rag_memory.get_store_tooling()
@@ -265,3 +304,118 @@ class RAGProcess(ProcessLike):
             print("wrong datatype given to messages")
 
         return context
+    
+
+class NonRAGProcess(ProcessLike):
+    """
+    A process that does not have access to rag.
+    used for comparing the performance of rag process
+    """
+    def __init__(self, name, client, model, max_char_context: int=100000):
+        super().__init__(name, client, model)
+
+        self.max_char_context = max_char_context
+        
+    def messages(self, data):
+        """
+        Provides the LLM with the instruction that it has access to search and store tools.
+        The actual retrieval only happens IF the LLM decides to call 'retrieve_RAG_data'.
+        and storing only happens IF the LLM decides to call 'store_RAG_data'.
+        """
+
+
+        context = [ 
+            Message(role="system",
+                content=
+                    "plase answer the task")
+        ]
+
+      
+        if isinstance(data, str):
+            context.append(Message(role="user", content=data))
+        elif isinstance(data, Message):
+            context.append(data)
+        elif isinstance(data,list):
+            for m in data:
+                if isinstance(m, Message):
+                    context.append(m)
+        else:
+            print("wrong datatype given to messages")
+
+        return context
+
+
+    def apply(self, data) -> str:
+        """
+        Given a context, computes an output using an LLM.
+        This is the main action performed by a process.
+
+        :param data: Some input data
+        :return: LLM response message
+        """
+        ctx.append(self.process_name)
+        #print(ctx.current_path())
+        #print(self.messages(context))
+
+        def get_total_chars(msgs):
+            return sum(len(str(m.get("content") or "")) for m in msgs)
+
+        messages = [asdict(m) for m in self.messages(data)]
+
+        return_value =""
+
+        #max 10 toolcalls
+        for _ in range(10):
+            
+
+            messages = prune_context(messages, max_chars=int(self.max_char_context/2))
+
+            #naive token limiter
+            allowed_output_tokens = int((self.max_char_context - get_total_chars(messages)) / 4)
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_completion_tokens=allowed_output_tokens
+            )
+            self.usages.append(response.usage)
+            response = response.choices[0]
+
+
+            #so it can remember what it said
+            if response.message.content:
+                # Check if the last message is an assistant message and fuse them
+                if messages and messages[-1]['role'] == 'assistant':
+                    messages[-1]['content'] += f"\n{response.message.content}"
+                else:
+                    messages.append({
+                        'role': 'assistant', 
+                        'content': response.message.content
+                    })
+
+            if response.message.tool_calls is not None:
+                for tool_call in response.message.tool_calls:
+                    function = tool_call.function
+                    fn = getattr(self, function.name)
+                    print(f"Process '{self.process_name}' calling {function.name} function")
+                    result = fn(**json.loads(function.arguments))
+
+                    # To add the return value of the toolcall
+                    messages.append({"role": "tool",
+                                     "tool_call_id": tool_call.id,
+                                     "content": str(result)})
+                    
+            if response.finish_reason == "stop":
+                #if no toolcall
+                break
+
+        else:
+            #will only run if forloop exits by iterating through everything
+            print("error to many itterations in apply")
+
+        ctx.pop()
+
+        return_value = messages[-1]["content"]
+
+
+        return return_value

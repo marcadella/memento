@@ -5,14 +5,14 @@ RAG-based memory using Neo4j.
 
 """
 
-from tempfile import tempdir
+import os
 
 from generics.memory import MemoryLike
 from neo4j import Driver
 from rag.connection import make_driver
 from rag.database import apply_schema, check_database
 
-from processes.RAGprocess import RAGRetrieveProcess, RAGStoreProcess
+from processes.RAGprocess import RAGStoreProcess
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
 from neo4j_graphrag.retrievers import VectorRetriever
 from utilities.Message import Message
@@ -28,26 +28,31 @@ class RAGMemory(MemoryLike):
             index_name(optional): used to specify vector index
         """
         super().__init__()
-        
-        
+            
         self.store_process = RAGStoreProcess(f"{name}.RAG_mem", client, model, self.store_RAG_data)
         
         #no need to have a retrieve process query should be enough to find correct data
         #self.retrieve_process = RAGRetrieveProcess(name, client, model, self.retrieve_RAG_data)
         
         # Initialize the Neo4j driver
-        self.driver:Driver = make_driver()
-        
+        self.driver:Driver = make_driver()    
 
         self.database_name = database_name
 
         #ensure database exists
         check_database(self.driver, self.database_name)
 
+
+        api_url = os.environ.get("CHATUIT_BASE_URL", "")
+        api_key = os.environ.get("CHATUIT_API_KEY", "")
+        
+        if api_url == "" or api_key == "":
+            raise Exception("ERROR: need to have an CHATUIT_BASE_URL and CHATUIT_API_KEY to use embedder for RAGmemory")
+
         #initialize embedder to use
         self.embedder = OpenAIEmbeddings(model="text-embedding-3-small", 
-                                         api_key= client.api_key,
-                                         base_url= client.base_url)
+                                         api_key= api_key,
+                                         base_url= api_url)
         embedding_dim = 1536
 
         #ensure that scheema exists
@@ -74,8 +79,6 @@ class RAGMemory(MemoryLike):
         """
         Stores text content as nodes with vector embeddings in Neo4j.
         """
-        
-
 
         #add some preprocessing here. for example cut text if too long, make text  more consise
         
@@ -96,8 +99,6 @@ class RAGMemory(MemoryLike):
             session.run(query, id=uuid4().int % 16000, text=chunk, vector=vector)
                             
         
-
-
     def retrieve_RAG_data(self, query):
         """
         Retrieves context using vector search 
@@ -137,6 +138,17 @@ class RAGMemory(MemoryLike):
         
         return self.retrieve_RAG_data(query)
 
+
+    def erase_data(self):
+        with self.driver.session() as session:
+            # Batches the deletion process safely in transactions of 10,000 rows
+            query = """
+            MATCH (n) 
+            CALL (n) { 
+                DETACH DELETE n 
+            } IN TRANSACTIONS OF 10000 ROWS
+            """
+            session.run(query)
 
 
     def get_store_tooling(self) -> dict:
