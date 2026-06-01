@@ -16,8 +16,8 @@ In this work, we experiment with three types of agentic memory strategies such a
 
 ### Video
 
-https://filedn.com/lIFJC8ES6odhW7qS8AxmmHY/memento.mp4
-and one video file in videos folder
+- https://filedn.com/lIFJC8ES6odhW7qS8AxmmHY/memento.mp4
+- https://filedn.com/lIFJC8ES6odhW7qS8AxmmHY/RAG_example.mp4
 
 ## Getting started
 
