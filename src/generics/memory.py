@@ -33,17 +33,3 @@ class MemoryLike(ABC):
         :param metadata: (most commonly a dict)
         """
         pass
-
-
-class MemoryWithEmbedding(MemoryLike):
-    """
-    A type of memory relying on the use of an embedding model.
-    """
-
-    def __init__(self, embedding_model):
-        super().__init__()
-        self.embedding_model = embedding_model
-
-    @abstractmethod
-    def embedding(self):
-        pass #todo

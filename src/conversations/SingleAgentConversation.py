@@ -5,7 +5,7 @@ from generics.agent import AgentLike
 
 class SingleAgentConversation(InteractiveConversation):
     """
-    A typical turn by turn conversation between a human and an agent.
+    A typical turn by turn conversation between a human and a single agent.
     When typing an agent command, the name of the agent may be omitted.
     Ex: `>.speak` is equivalent to `>Caroline.speak`
     """

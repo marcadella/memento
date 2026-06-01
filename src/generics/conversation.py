@@ -13,7 +13,7 @@ from utilities.Context import ctx
 
 class ConversationLike(ABC):
     """
-    A place where some agents can talk together.
+    A space where some agents can talk together.
     If an existing conversation_name is provided, the conversation is resumed.
     """
     def __init__(self, agents: list[AgentLike], output_dir, conversation_name, override):

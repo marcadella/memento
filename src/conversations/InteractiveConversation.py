@@ -6,7 +6,7 @@ from utilities.Context import ctx
 
 class InteractiveConversation(ConversationLike):
     """
-    An interactive conversation where each turn, the first human registered controls who speak (or speak himself).
+    An interactive conversation where, at each turn, the first registered human controls who speaks (or speaks himself).
     """
     def __init__(self, agents: list[AgentLike], output_dir="output", conversation_name=None, override=False):
         super().__init__(agents, output_dir, conversation_name, override)

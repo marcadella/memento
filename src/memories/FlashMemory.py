@@ -4,6 +4,9 @@ from utilities.Message import Message
 
 
 class FlashMemory(MemoryLike):
+    """
+    A type of highly-volatile memory where the `flash_memory_size` last characters of the context are cached.
+    """
     def __init__(self, flash_memory_size):
         super().__init__()
         self.bounded_context = BoundedContext(flash_memory_size)

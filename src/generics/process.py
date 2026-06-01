@@ -10,7 +10,7 @@ from utilities.Message import Message
 
 class ProcessLike(ABC):
     """
-    A process uses a stateless LLM for carrying out some kind of computation.
+    A process uses a stateless LLM that carries out some kind of computation.
     """
     def __init__(self, process_name, client, model):
         self.process_name = process_name # A name to distinguish different processes in verbose mode

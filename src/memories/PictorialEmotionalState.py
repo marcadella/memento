@@ -10,6 +10,9 @@ from utilities.client import default_client
 
 
 class PictorialEmotionalState(MemoryLike):
+    """
+    A type of memory storing the emotional state of the agent as an image.
+    """
     def __init__(self, client=default_client, initial_emotional_state="results/emotions/sad.png", skip_generation=False):
         super().__init__()
         self.client = client

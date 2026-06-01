@@ -4,8 +4,8 @@ from utilities.Message import Message
 
 class ReactToContextProcess(ProcessLike):
     """
-    Example of output process where the LLM is requested to produce an answer given a context using a system prompt.
-    The agent knows its name.
+    Example of speaking process where the LLM is requested to produce an answer given a context using a system prompt.
+    The agent knows its own name.
     """
     def __init__(self, process_name, client, model, agent_name):
         super().__init__(process_name, client, model)

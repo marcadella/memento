@@ -22,7 +22,6 @@ class EmotionalAgent(AgentLike):
         self.post_modulation = post_modulation
 
         # Memories
-        #self.kv_memory = KeyValueMemory(name, self.client, model)
         self.emotional_state = PictorialEmotionalState(self.client, skip_generation=skip_generation, initial_emotional_state=f"results/emotions/{initial_emotion}.png")
         self.flash_memory = FlashMemory(10000)
         self.LOT = LineOfThought()
@@ -31,8 +30,10 @@ class EmotionalAgent(AgentLike):
         # Processes
         self.hearing_processes = HearingProcess("hearing", self.client, model, name, self.LOT)
         if self.post_modulation:
+            # With post modulation, the agent produces an output, which is modulated afterward.
             self.speaking_process = ReactInConversationProcess("speaking", self.client, model, name, self.LOT)
         else:
+            # Here, the modulation is integrated withing the generation process.
             self.speaking_process = ReactInConversationWithModulationProcess(process_name="speaking", client=self.client, model="gpt-4.1", agent_name=name,
                                                                              LOT=None if not self.skip_LOT else self.LOT,
                                                                              emotional_state=self.emotional_state)
@@ -42,32 +43,33 @@ class EmotionalAgent(AgentLike):
             "flash": "Prints the content of the flash memory.",
             "tokens": "Prints the sum of token used.",
             "thoughts": "Prints the line of thoughts.",
-            "emotions": "Shows the emotions in an external viewer."
+            "emotions": "Shows the emotional state picture in an external viewer."
         }
 
     def speak(self):
         """
-        We react to the diverse memory/states
+        Conscious speaking process.
+        React to the different states (flash, line of thought, and emotional state) and generates an output.
         """
         answer = self.speaking_process.apply(self.flash_memory.get())
         if self.post_modulation:
+            # Optional post modulation.
             print(f"Unmodulated: {answer}")
             answer = self.emotional_state.get(answer)[0]
         return answer
 
     def hear(self, speaker_name: str, content: str):
-        """In this implementation, each new message is analysed by the KeyValueMemory process:
-          - if something is worth storing in the memory, the LLM makes a call to a storage function (one or more times)
-          - if nothing is interesting, the LLM do nothing.
-          Then we append the message to the unbounded history.
+        """Conscious hearing process.
+        In this implementation, each new message is:
+        - appended to the flash memory,
+        - affects the emotional state,
+        - update the line of thoughts
         """
         role = "assistant" if speaker_name == self.name else "user"
         message = Message(role=role, content=content, name=speaker_name)
         self.flash_memory.put(message)
         if role != "assistant":
-            #self.kv_memory.put(content)
             self.emotional_state.put(self.flash_memory.get()[-1])
-            #print(self.flash_memory.get())
             self.hearing_processes.apply(self.flash_memory.get())
 
     def flash(self):
@@ -79,16 +81,16 @@ class EmotionalAgent(AgentLike):
 
     def tokens(self, last_n=0):
         """
-        Get the completion, prompt and total token counts of all the processes.
+        Get the token counts of all the processes.
         :param last_n: Only last n responses. If 0 (default), return sum for all responses.
         :return: String.
         """
-        completion_tokens = self.speaking_process.tokens("output", last_n)
-        prompt_tokens = self.speaking_process.tokens("input", last_n)
+        output_tokens = self.speaking_process.tokens("output", last_n)
+        input_tokens = self.speaking_process.tokens("input", last_n)
         total_tokens = self.speaking_process.tokens("total", last_n)
 
-        return "\n".join([f"- output_tokens: {completion_tokens}",
-                            f"- input_tokens: {prompt_tokens}",
+        return "\n".join([f"- output_tokens: {output_tokens}",
+                            f"- input_tokens: {input_tokens}",
                             f"- total_tokens: {total_tokens}"])
 
     def thoughts(self):

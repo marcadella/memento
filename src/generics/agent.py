@@ -14,7 +14,7 @@ class AgentLike(ABC):
     @abstractmethod
     def speak(self) -> str:
         """
-        Produce a message to be delivered to listeners
+        Conscious speaking process. Produce a message to be delivered to listeners.
         :return: Message
         """
         pass
@@ -22,11 +22,15 @@ class AgentLike(ABC):
     @abstractmethod
     def hear(self, speaker_name: str, content: str):
         """
-        Process a message delivered by some speaker.
+        Conscious hearing process. Process input from the environment (message delivered by some speaker).
         :param speaker_name: Name of the speaker
         :param content: Received message
         """
         pass
 
     def help(self):
+        """
+        Display help message (list of all available commands for this agent)
+        :return:
+        """
         return "\n".join([f"- {com}: {descr}" for com, descr in self.registered_commands.items()])

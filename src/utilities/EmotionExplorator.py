@@ -4,6 +4,9 @@ from utilities.client import default_client
 
 
 class EmotionExplorator:
+    """
+    A utility to generate and interpret emotion pictures.
+    """
     def __init__(self, name, emotion=None, out_path="results/emotions", client=default_client):
         super().__init__()
         self.image_model = "gpt-image-1"

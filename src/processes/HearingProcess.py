@@ -5,8 +5,7 @@ from utilities.Message import Message
 
 class HearingProcess(ProcessLike):
     """
-    Example of output process where the LLM is requested to produce an answer given a context using a system prompt.
-    The agent knows its name, and it is aware that there may be multiple users taking part of the discussion.
+    Example of hearing process
     """
     def __init__(self, process_name, client, model, agent_name, thoughts: LineOfThought):
         super().__init__(process_name, client, model)

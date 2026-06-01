@@ -26,7 +26,7 @@ class BaseAgent(AgentLike):
         """
         In this implementation, we only react to the context.
         """
-        context = self.flash_memory.get() # Only for testing purpose
+        context = self.flash_memory.get()
         return self.react_processes.apply(context)
 
     def hear(self, speaker_name: str, content: str):

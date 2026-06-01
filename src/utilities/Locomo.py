@@ -6,6 +6,9 @@ import yaml
 
 
 class Locomo:
+    """
+    Utility to download locomo dataset
+    """
     def __init__(self, output_path="output"):
         self.output_path = output_path
 
