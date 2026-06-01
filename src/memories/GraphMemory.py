@@ -13,6 +13,7 @@ get() is not implemented yet. Retrieval will land in a separate branch.
 """
 
 
+import os
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -44,6 +45,18 @@ ENTITY_STOPWORDS: frozenset[str] = frozenset({
     # agent-self labels
     "assistant", "ai", "bot", "chatbot",
 })
+
+
+def _vlog(*parts):
+    """Verbose log to stderr, gated by the EVAL_VERBOSE env var.
+
+    Used to trace extractor/linker decisions during smoke tests without
+    polluting normal-run output. Writes to stderr so the message survives
+    contexts that redirect stdout (the eval harness silences stdout
+    during ingestion).
+    """
+    if os.environ.get("EVAL_VERBOSE"):
+        print(*parts, file=sys.stderr, flush=True)
 
 
 class GraphMemory(MemoryLike):
@@ -130,6 +143,8 @@ class GraphMemory(MemoryLike):
         # attributed to the actual speaker by name, not to a shared
         # 'user' entity. Critical for multi-speaker conversations
         # (e.g. LoCoMo eval where two humans both say 'I').
+        preview = data.content if len(data.content) <= 120 else data.content[:117] + "..."
+        _vlog(f"[extract] processing {speaker}: {preview}")
         self.extraction_process.apply((speaker, data.content))
         self._current_message_id = None  # Reset so any accidental call to store_triple outside of put() raises an error
 
@@ -196,16 +211,22 @@ class GraphMemory(MemoryLike):
                 "store_triple called outside of put(). Extractor must run via the put() pipeline."
             )
 
+        tag = "[link]" if source == "linker" else "[extract]"
+        triple_str = f"({head}) -[{relation}]-> ({tail})"
+
         # Deterministic noise filter: drop triples whose head or tail is
         # a stopword, the agent's own name, or empty. Prompt rules cover
         # this but the LLM ignores them sometimes.
         h_norm = head.strip().lower()
         t_norm = tail.strip().lower()
         if not h_norm or not t_norm:
+            _vlog(f"{tag} DROP (empty): {triple_str}")
             return
         if h_norm in ENTITY_STOPWORDS or t_norm in ENTITY_STOPWORDS:
+            _vlog(f"{tag} DROP (stopword): {triple_str}")
             return
         if h_norm == self.agent_id.lower() or t_norm == self.agent_id.lower():
+            _vlog(f"{tag} DROP (agent-self): {triple_str}")
             return
 
         # Linker dedup: skip if any :RELATES with the same
@@ -229,6 +250,7 @@ class GraphMemory(MemoryLike):
                     agent_id=self.agent_id,
                 ).single()
                 if existing:
+                    _vlog(f"{tag} SKIP (dedup): {triple_str}")
                     return
 
         # Embed both entities so they are vector-searchable later.
@@ -291,6 +313,8 @@ class GraphMemory(MemoryLike):
                 timestamp=timestamp,
                 source=source,
             )
+
+        _vlog(f"{tag} WROTE: {triple_str}")
 
     # -------- read path --------
 
@@ -415,7 +439,7 @@ class GraphMemory(MemoryLike):
             # entity list aligns with the message window the LLM sees.
             n = len(recent_messages)
             with self.driver.session() as session:
-                result = session.run(
+                ent_result = session.run(
                     """
                     MATCH (m:Message {agent_id: $agent_id})
                     WITH m ORDER BY m.timestamp DESC LIMIT $n
@@ -425,18 +449,47 @@ class GraphMemory(MemoryLike):
                     agent_id=self.agent_id,
                     n=n,
                 )
-                entities = [r["name"] for r in result]
+                entities = [r["name"] for r in ent_result]
+
+                # Also pull existing :RELATES edges that already connect
+                # these entities. Passing them to the linker lets it
+                # reason about what is already known and avoid proposing
+                # duplicates (the pre-check dedup catches them anyway,
+                # but giving the LLM visibility produces cleaner output).
+                if entities:
+                    edges_result = session.run(
+                        """
+                        MATCH (h:Entity {agent_id: $agent_id})-[r:RELATES {agent_id: $agent_id}]->(t:Entity {agent_id: $agent_id})
+                        WHERE h.name IN $entity_names AND t.name IN $entity_names
+                        RETURN h.name AS head, r.type AS type, t.name AS tail
+                        """,
+                        agent_id=self.agent_id,
+                        entity_names=entities,
+                    )
+                    existing_edges = [(r["head"], r["type"], r["tail"]) for r in edges_result]
+                else:
+                    existing_edges = []
 
             if not entities:
+                _vlog(f"[link] start: {n} msgs ({total_chars}c), 0 entities — skipping")
                 return  # nothing was extracted yet, nothing to link
 
+            _vlog(
+                f"[link] start: {n} msgs ({total_chars}c), "
+                f"{len(entities)} entities, {len(existing_edges)} existing edges"
+            )
+
             entities_str = ", ".join(entities)
+            edges_str = (
+                "\n".join(f"{h} -[{t}]-> {tl}" for h, t, tl in existing_edges)
+                or "(none)"
+            )
             messages_str = "\n".join(
                 f"{m.name or m.role.upper()}: {m.content}"
                 for m in recent_messages
             )
 
-            self.link_process.apply((entities_str, messages_str))
+            self.link_process.apply((entities_str, edges_str, messages_str))
         except Exception as e:
             # stderr so errors survive stdout-redirect contexts (e.g.,
             # the eval harness silences stdout during ingestion).
