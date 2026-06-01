@@ -8,7 +8,9 @@ dependencies:
   - pyyaml
   - requests
   - pillow
+  - streamlit
   - pip
   - pip:
       - neo4j
+      - pyvis
 
