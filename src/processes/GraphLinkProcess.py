@@ -50,9 +50,11 @@ class GraphLinkProcess(ProcessLike):
                         "head": {
                             "type": "string",
                             "description": (
-                                "Subject entity. Use 'user' for first-person. "
-                                "Use names exactly as they appear in the recent "
-                                "entities list."
+                                "Subject entity. For first-person utterances use the "
+                                "speaker's name (the part before the colon in each "
+                                "Recent turn), never the literal word 'user'. Use "
+                                "names exactly as they appear in the recent entities "
+                                "list."
                             ),
                         },
                         "relation": {
@@ -85,15 +87,23 @@ class GraphLinkProcess(ProcessLike):
         """Build the link-process prompt.
 
         Args:
-            data: Tuple (entities_str, messages_str). The caller is
-                GraphMemory.link(), which assembles both strings from
-                recent flash context and recent :MENTIONS in Neo4j.
+            data: Tuple (entities_str, edges_str, messages_str). The
+                caller is GraphMemory.link(), which assembles all three
+                from recent flash context and recent :MENTIONS / :RELATES
+                edges in Neo4j. edges_str gives the linker visibility
+                into already-known relationships so it can avoid
+                proposing duplicates and reason about what is genuinely
+                missing.
 
         Returns:
             Single system message; no chat history.
         """
-        entities_str, messages_str = data
-        content = self.prompt_template.format(entities=entities_str, messages=messages_str)
+        entities_str, edges_str, messages_str = data
+        content = self.prompt_template.format(
+            entities=entities_str,
+            existing_edges=edges_str,
+            messages=messages_str,
+        )
         return [Message(role="system", content=content)]
 
     def apply(self, data) -> str:

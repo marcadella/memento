@@ -98,6 +98,29 @@ Three helper scripts in `scripts/` for development:
 Schema is preserved across clears.
 
 
+### Graph memory chat UI
+
+A Streamlit + pyvis demo for chatting with the graph-memory agent and
+watching its Neo4j subgraph update turn-by-turn. Launch:
+
+```bash
+conda activate memento
+streamlit run chatGraph.py
+```
+
+Opens at http://localhost:8501. The left pane is a chat interface; the
+right pane renders the agent's entity-relation graph (orange circles
+are entities, light-blue boxes are messages, blue edges are
+extractor-written, red edges are linker-written). The right-side
+filter panel lets you toggle node types, edge sources, and the
+"recent N" entity view. Each session runs under its own
+`ui_<timestamp>` agent_id so it does not collide with other agents
+in Neo4j.
+
+Streamlit and pyvis are installed by `environment.yml`. If you pulled
+the branch before they were added, run `conda env update -f environment.yml --prune`
+to get them.
+
 
 ### Next step
 

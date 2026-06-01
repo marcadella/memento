@@ -96,6 +96,13 @@ def graph_agent_factory(agent_name: str, chat_client, extraction_client, driver)
     agent_name is set to something neither LoCoMo speaker matches so
     both speakers go through extraction (otherwise half the facts
     would be skipped via the assistant-utterance bypass).
+
+    linker_window_chars is bumped from the 3000-char default to 7000
+    for eval. The eval triggers the linker once at end-of-session
+    (instead of after every assistant reply as in production), so we
+    widen the window to give that single invocation more cross-turn
+    context to work with. Interactive scripts (chatGraph.py,
+    exampleGraph.py) keep the smaller default.
     """
     return GraphAgent(
         name=agent_name,
@@ -104,6 +111,7 @@ def graph_agent_factory(agent_name: str, chat_client, extraction_client, driver)
         model="gpt-4.1-mini",
         extraction_client=extraction_client,
         extraction_model="gpt-4.1" if extraction_client else None,
+        linker_window_chars=7000,
     )
 
 
@@ -171,7 +179,8 @@ def total_session_count(conv: dict) -> int:
 
 # ---------------- ingestion ----------------
 
-def ingest_conversation(agent, conv: dict, verbose: bool = True, max_sessions: int | None = None):
+def ingest_conversation(agent, conv: dict, verbose: bool = True, max_sessions: int | None = None,
+                         snapshot_quarters: bool = False):
     """Replay every session of conv into agent, session by session.
 
     After each session we manually call graph_memory.link() so the
@@ -182,8 +191,24 @@ def ingest_conversation(agent, conv: dict, verbose: bool = True, max_sessions: i
 
     Extraction and linker prints are silenced inside the inner loop so
     they do not scramble the progress bar.
+
+    If snapshot_quarters is True, pause ingestion after the session that
+    crosses each 25%, 50%, 75%, 100% threshold so the user can take a
+    Neo4j Browser screenshot of the growing graph.
     """
     n_sessions, _, inflated_turns = count_turns(conv, max_sessions=max_sessions)
+
+    # Pause at sessions crossing the 25%, 50%, 75% marks. We skip the
+    # 100% checkpoint deliberately: the final state of the graph is the
+    # state at end of ingestion, and the user can screenshot it any time
+    # after the run completes (the data persists in Neo4j).
+    checkpoint_sessions = set()
+    if snapshot_quarters and n_sessions > 0:
+        for q in (1, 2, 3):
+            idx = max(1, round(n_sessions * q / 4))
+            if idx < n_sessions:
+                checkpoint_sessions.add(idx)
+
     total_turns = 0
     session_idx = 0
     for _, turns in iter_sessions(conv, max_sessions=max_sessions):
@@ -207,6 +232,18 @@ def ingest_conversation(agent, conv: dict, verbose: bool = True, max_sessions: i
         if recent:
             with _silenced():
                 agent.graph_memory.link(recent)
+
+        if session_idx in checkpoint_sessions:
+            quarter = round(session_idx / n_sessions * 4)
+            agent_id = getattr(agent, "name", "<unknown>")
+            print()  # newline after progress bar line
+            print(f"\n=== CHECKPOINT {quarter}/4: completed {session_idx}/{n_sessions} sessions ===")
+            print(f"Take a Neo4j Browser screenshot now. Suggested Cypher:\n")
+            print(f"  MATCH (n:Entity {{agent_id: '{agent_id}'}})")
+            print(f"  OPTIONAL MATCH (n)-[r:RELATES {{agent_id: '{agent_id}'}}]->(m:Entity {{agent_id: '{agent_id}'}})")
+            print(f"  RETURN n, r, m")
+            print()
+            input("Press Enter to continue ingestion: ")
     return total_turns
 
 
@@ -336,8 +373,77 @@ def print_plan(agent_type, conv, num_questions, agent_name, ts_placeholder,
     print("=" * 60)
 
 
+def _write_summary(summary_path, agent_type, conv_id, speakers,
+                    fraction, n_ingested_sessions, total_sessions,
+                    ingestion_turns, rows, agent, judge_totals,
+                    ts, csv_name):
+    """Compute and write the summary JSON snapshot from current state.
+
+    Safe to call after every question; idempotent overwrite gives an
+    always-current on-disk snapshot in case the run aborts. Returns the
+    summary dict so callers can reuse it for end-of-run printing.
+    """
+    if not rows:
+        return None
+
+    score_counts = Counter(r["score"] for r in rows)
+    avg = sum(r["score_value"] for r in rows) / len(rows)
+
+    def proc_tokens(proc):
+        return {
+            "prompt": proc.tokens("prompt"),
+            "completion": proc.tokens("completion"),
+            "total": proc.tokens("total"),
+        }
+    extractor_tokens = proc_tokens(agent.graph_memory.extraction_process)
+    linker_tokens = proc_tokens(agent.graph_memory.link_process)
+    grand_total = (
+        extractor_tokens["total"]
+        + linker_tokens["total"]
+        + judge_totals["total"]
+    )
+
+    summary = {
+        "agent_type": agent_type,
+        "conv_id": conv_id,
+        "speakers": speakers,
+        "fraction": fraction,
+        "ingested_sessions": n_ingested_sessions,
+        "total_sessions": total_sessions,
+        "ingestion_turns": ingestion_turns,
+        "num_questions": len(rows),
+        "scores": {
+            "correct": score_counts["correct"],
+            "partial": score_counts["partial"],
+            "incorrect": score_counts["incorrect"],
+            "average": round(avg, 4),
+            "per_category": {
+                str(cat): round(
+                    sum(r["score_value"] for r in rows if r["category"] == cat)
+                    / sum(1 for r in rows if r["category"] == cat), 4)
+                for cat in sorted({r["category"] for r in rows})
+            },
+        },
+        "tokens": {
+            "extractor": extractor_tokens,
+            "linker": linker_tokens,
+            "judge": judge_totals,
+            "grand_total": grand_total,
+            "note": "Embedding tokens not counted (embed_text helper does not expose usage; cheap relative to chat tokens).",
+        },
+        "timestamp": ts,
+        "csv_path": csv_name,
+    }
+
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+
+    return summary
+
+
 def evaluate(agent_type: str, conv_id: int, num_questions: int, seed: int = 0,
-             assume_yes: bool = False, fraction: float = 1.0):
+             assume_yes: bool = False, fraction: float = 1.0,
+             snapshot_quarters: bool = False):
     if agent_type not in AGENT_FACTORIES:
         raise ValueError(f"--agent must be one of {list(AGENT_FACTORIES)}; got {agent_type!r}")
     if not (0 < fraction <= 1):
@@ -404,7 +510,8 @@ def evaluate(agent_type: str, conv_id: int, num_questions: int, seed: int = 0,
         agent = factory(agent_name, chat_client, extraction_client, driver)
 
         print("Ingesting conversation...")
-        total = ingest_conversation(agent, conv, max_sessions=max_sessions)
+        total = ingest_conversation(agent, conv, max_sessions=max_sessions,
+                                     snapshot_quarters=snapshot_quarters)
         print(f"Ingestion complete: {total} turns total ({n_ingested_sessions} sessions)\n")
 
         # Sample questions: cats 1-4, with answer, AND evidence within the
@@ -421,109 +528,94 @@ def evaluate(agent_type: str, conv_id: int, num_questions: int, seed: int = 0,
         print(f"Sampled {len(sampled)} questions from {len(eligible)} eligible "
               f"(cats 1-4; evidence within first {n_ingested_sessions} sessions)\n")
 
-        # Run + judge. Track judge token usage per row and accumulate.
-        rows = []
-        judge_totals = {"prompt": 0, "completion": 0, "total": 0}
-        running = {"correct": 0, "partial": 0, "incorrect": 0}
-        for i, q in enumerate(sampled, 1):
-            question = q["question"]
-            expected = q["answer"]
-            category = q["category"]
-
-            with _silenced():
-                retrieved = agent.retrieve(question)
-                score, reason, judge_usage = judge(judge_client, judge_model, question, expected, retrieved)
-            for k in judge_totals:
-                judge_totals[k] += judge_usage[k]
-            running[score] += 1
-
-            _progress(i, len(sampled),
-                      label="Questions ",
-                      suffix=f"✓{running['correct']} ~{running['partial']} ✗{running['incorrect']}")
-
-            rows.append({
-                "agent_type": agent_type,
-                "conv_id": sample_id,
-                "q_index": i,
-                "category": category,
-                "question": question,
-                "expected": expected,
-                "retrieved": retrieved,
-                "score": score,
-                "score_value": SCORE_TO_FLOAT[score],
-                "reason": reason,
-                "judge_prompt_tokens": judge_usage["prompt"],
-                "judge_completion_tokens": judge_usage["completion"],
-                "judge_total_tokens": judge_usage["total"],
-            })
-
-        # Persist.
+        # Prepare output paths up front so partial writes have a place to land
+        # if the run aborts mid-loop.
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         out_path = RESULTS_DIR / f"{agent_type}_{sample_id}_{ts}.csv"
-        with open(out_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        summary_path = out_path.with_suffix("").with_name(out_path.stem + "_summary.json")
+
+        csv_fields = [
+            "agent_type", "conv_id", "q_index", "category",
+            "question", "expected", "retrieved",
+            "score", "score_value", "reason",
+            "judge_prompt_tokens", "judge_completion_tokens", "judge_total_tokens",
+        ]
+
+        # Run + judge. Track judge token usage per row and accumulate.
+        # Append each row to the CSV and rewrite the summary JSON after
+        # every question so a crash mid-run preserves the partial work
+        # done so far.
+        rows = []
+        judge_totals = {"prompt": 0, "completion": 0, "total": 0}
+        running = {"correct": 0, "partial": 0, "incorrect": 0}
+        print(f"Writing rows incrementally to {out_path.name}")
+        with open(out_path, "w", newline="", encoding="utf-8") as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=csv_fields)
             writer.writeheader()
-            writer.writerows(rows)
+            csv_file.flush()
+
+            for i, q in enumerate(sampled, 1):
+                question = q["question"]
+                expected = q["answer"]
+                category = q["category"]
+
+                with _silenced():
+                    retrieved = agent.retrieve(question)
+                    score, reason, judge_usage = judge(judge_client, judge_model, question, expected, retrieved)
+                for k in judge_totals:
+                    judge_totals[k] += judge_usage[k]
+                running[score] += 1
+
+                _progress(i, len(sampled),
+                          label="Questions ",
+                          suffix=f"✓{running['correct']} ~{running['partial']} ✗{running['incorrect']}")
+
+                row = {
+                    "agent_type": agent_type,
+                    "conv_id": sample_id,
+                    "q_index": i,
+                    "category": category,
+                    "question": question,
+                    "expected": expected,
+                    "retrieved": retrieved,
+                    "score": score,
+                    "score_value": SCORE_TO_FLOAT[score],
+                    "reason": reason,
+                    "judge_prompt_tokens": judge_usage["prompt"],
+                    "judge_completion_tokens": judge_usage["completion"],
+                    "judge_total_tokens": judge_usage["total"],
+                }
+                rows.append(row)
+                writer.writerow(row)
+                csv_file.flush()
+
+                # Update the summary snapshot on disk after every question.
+                # Tiny JSON; cheap. Means a crash leaves a coherent
+                # summary up to the last completed question.
+                _write_summary(
+                    summary_path, agent_type, sample_id, [speaker_a, speaker_b],
+                    fraction, n_ingested_sessions, total_sessions, total,
+                    rows, agent, judge_totals, ts, out_path.name,
+                )
+
         print(f"Wrote {out_path}")
 
-        # Aggregate scores.
-        score_counts = Counter(r["score"] for r in rows)
-        avg = sum(r["score_value"] for r in rows) / len(rows)
-
-        # Pull token usage from each ProcessLike that ran.
-        # The agent.retrieve() path does not use chat tokens but it
-        # does call the embedding API once per question. Embedding
-        # tokens are not tracked (the shared embed_text helper does
-        # not expose usage); they are cheap relative to chat tokens
-        # (~100x cheaper per token on the same provider).
-        def proc_tokens(proc):
-            return {
-                "prompt": proc.tokens("prompt"),
-                "completion": proc.tokens("completion"),
-                "total": proc.tokens("total"),
-            }
-        extractor_tokens = proc_tokens(agent.graph_memory.extraction_process)
-        linker_tokens = proc_tokens(agent.graph_memory.link_process)
-        grand_total = (
-            extractor_tokens["total"]
-            + linker_tokens["total"]
-            + judge_totals["total"]
+        # Final summary read for printing (already written to disk by the loop).
+        summary = _write_summary(
+            summary_path, agent_type, sample_id, [speaker_a, speaker_b],
+            fraction, n_ingested_sessions, total_sessions, total,
+            rows, agent, judge_totals, ts, out_path.name,
         )
+        if summary is None:
+            print("\nNo questions were judged; nothing to summarize.")
+            return
 
-        summary = {
-            "agent_type": agent_type,
-            "conv_id": sample_id,
-            "speakers": [speaker_a, speaker_b],
-            "fraction": fraction,
-            "ingested_sessions": n_ingested_sessions,
-            "total_sessions": total_sessions,
-            "ingestion_turns": total,
-            "num_questions": len(rows),
-            "scores": {
-                "correct": score_counts["correct"],
-                "partial": score_counts["partial"],
-                "incorrect": score_counts["incorrect"],
-                "average": round(avg, 4),
-                "per_category": {
-                    str(cat): round(sum(s for s in [r["score_value"] for r in rows if r["category"] == cat]) / sum(1 for r in rows if r["category"] == cat), 4)
-                    for cat in sorted({r["category"] for r in rows})
-                },
-            },
-            "tokens": {
-                "extractor": extractor_tokens,
-                "linker": linker_tokens,
-                "judge": judge_totals,
-                "grand_total": grand_total,
-                "note": "Embedding tokens not counted (embed_text helper does not expose usage; cheap relative to chat tokens).",
-            },
-            "timestamp": ts,
-            "csv_path": str(out_path.name),
-        }
-
-        summary_path = out_path.with_suffix("").with_name(out_path.stem + "_summary.json")
-        with open(summary_path, "w", encoding="utf-8") as f:
-            json.dump(summary, f, indent=2)
+        score_counts = summary["scores"]
+        avg = score_counts["average"]
+        extractor_tokens = summary["tokens"]["extractor"]
+        linker_tokens = summary["tokens"]["linker"]
+        grand_total = summary["tokens"]["grand_total"]
 
         print(f"\n=== Summary ({agent_type} on {sample_id}) ===")
         print(f"  correct:   {score_counts['correct']}")
@@ -560,9 +652,14 @@ def main():
                         help="Fraction of the conversation's sessions to ingest, in (0, 1]. "
                              "Defaults to 1.0 (full). 0.25 = first quarter. Questions whose "
                              "evidence falls outside the ingested range are filtered out.")
+    parser.add_argument("--snapshot-quarters", action="store_true",
+                        help="Pause ingestion after the sessions crossing the 25%%, 50%%, 75%%, 100%% "
+                             "marks so the user can take Neo4j Browser screenshots of the growing graph. "
+                             "Useful for figures showing graph evolution; do not use for batch runs.")
     args = parser.parse_args()
 
-    evaluate(args.agent, args.conv_id, args.num_questions, args.seed, args.yes, args.fraction)
+    evaluate(args.agent, args.conv_id, args.num_questions, args.seed, args.yes, args.fraction,
+             args.snapshot_quarters)
 
 
 if __name__ == "__main__":
